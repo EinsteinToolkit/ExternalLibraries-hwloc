@@ -1,10 +1,14 @@
 # Configuration definitions for thorn hwloc
 
+OPTIONAL pciutils
+{
+}
+
 PROVIDES hwloc
 {
   SCRIPT configure.sh
   LANG bash
-  OPTIONS HWLOC_DIR
+  OPTIONS HWLOC_DIR HWLOC_INSTALL_DIR
 }
 
 REQUIRES hwloc
