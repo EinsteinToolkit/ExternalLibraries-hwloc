@@ -1,5 +1,7 @@
 # Configuration definitions for thorn hwloc
 
+REQUIRES zlib
+
 OPTIONAL pciutils
 {
 }

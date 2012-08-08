@@ -1,9 +1,4 @@
 # make.configuration.defn file for thorn hwloc
 
 # Define the hwloc utilities
-ALL_UTILS += hwloc-assembler hwloc-assembler-remote hwloc-bind hwloc-calc hwloc-distances hwloc-distrib hwloc-info hwloc-ls hwloc-mask hwloc-ps lstopo
-
-# hwloc-gather-topology may not exist
-ifneq ($(wildcard $(HWLOC_DIR)/bin/hwloc-gather-topology*),)
-ALL_UTILS += hwloc-gather-topology
-endif
+ALL_UTILS += hwloc-assembler hwloc-assembler-remote hwloc-bind hwloc-calc hwloc-distances hwloc-distrib hwloc-info hwloc-ls hwloc-ps lstopo lstopo-no-graphics
