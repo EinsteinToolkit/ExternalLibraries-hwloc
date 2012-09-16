@@ -126,7 +126,7 @@ then
         
         echo "hwloc: Unpacking archive..."
         pushd ${BUILD_DIR}
-        ${TAR} xzf ${SRCDIR}/dist/${NAME}.tar.gz
+        ${TAR?} xzf ${SRCDIR}/dist/${NAME}.tar.gz
         
         echo "hwloc: Configuring..."
         cd ${NAME}
