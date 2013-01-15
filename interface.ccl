@@ -1,3 +1,12 @@
 # Interface definition for thorn hwloc
 
 IMPLEMENTS: hwloc
+
+CCTK_INT FUNCTION GetNumSMTThreads()
+PROVIDES FUNCTION GetNumSMTThreads WITH hwloc_GetNumSMTThreads LANGUAGE C
+
+# The ACML library on Kraken already defines a GetCacheInfo
+CCTK_INT FUNCTION GetCacheInfo1(CCTK_INT ARRAY OUT linesizes,            \
+                                CCTK_INT ARRAY OUT strides,              \
+                                CCTK_INT IN max_num_cache_levels)
+PROVIDES FUNCTION GetCacheInfo1 WITH hwloc_GetCacheInfo LANGUAGE C

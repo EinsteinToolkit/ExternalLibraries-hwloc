@@ -4,3 +4,8 @@ SCHEDULE hwloc_lstopo AT startup
 {
   LANG: C
 } "Output hardware locality information"
+
+SCHEDULE hwloc_system_topology AT startup AFTER hwloc_lstopo BEFORE Driver_Startup
+{
+  LANG: C
+} "Output and/or modify system topology and hardware locality"

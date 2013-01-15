@@ -76,7 +76,7 @@ then
     
     # Set locations
     THORN=hwloc
-    NAME=hwloc-1.5.1
+    NAME=hwloc-1.6.1rc1
     SRCDIR=$(dirname $0)
     BUILD_DIR=${SCRATCH_BUILD}/build/${THORN}
     if [ -z "${HWLOC_INSTALL_DIR}" ]; then
@@ -127,6 +127,7 @@ then
         echo "hwloc: Unpacking archive..."
         pushd ${BUILD_DIR}
         ${TAR?} xzf ${SRCDIR}/dist/${NAME}.tar.gz
+        ${PATCH?} -p0 < ${SRCDIR}/dist/libs.patch
         
         echo "hwloc: Configuring..."
         cd ${NAME}
@@ -168,10 +169,22 @@ fi
 
 
 
-# TODO: use pkginfo instead to define these
-HWLOC_INC_DIRS="${HWLOC_DIR}/include"
-HWLOC_LIB_DIRS="${HWLOC_DIR}/lib"
-HWLOC_LIBS='hwloc'
+#HWLOC_INC_DIRS="${HWLOC_DIR}/include"
+#HWLOC_LIB_DIRS="${HWLOC_DIR}/lib"
+#HWLOC_LIBS='hwloc'
+
+export PKG_CONFIG_PATH=${HWLOC_DIR}/lib/pkgconfig:${PCIUTILS_DIR}/lib/pkgconfig:${PKG_CONFIG_PATH}
+
+HWLOC_INC_DIRS="$(echo '' $(pkg-config hwloc --static --cflags 2>/dev/null || pkg-config hwloc --cflags) '' | sed -e 's+ -I/include + +g;s+ -I/usr/include + +g;s+ -I/usr/local/include + +g' | sed -e 's/ -I/ /g')"
+HWLOC_LIB_DIRS="$(echo '' $(pkg-config hwloc --static --libs 2>/dev/null || pkg-config hwloc --libs) '' | sed -e 's/ -l[^ ]*/ /g' | sed -e 's+ -L/lib + +g;s+ -L/lib64 + +g;s+ -L/usr/lib + +g;s+ -L/usr/lib64 + +g;s+ -L/usr/local/lib + +g;s+ -L/usr/local/lib64 + +g' | sed -e 's/ -L/ /g')"
+HWLOC_LIBS="$(echo '' $(pkg-config hwloc --static --libs 2>/dev/null || pkg-config hwloc --libs) '' | sed -e 's/ -[^l][^ ]*/ /g' | sed -e 's/ -l/ /g')"
+
+# Add libnuma manually, if necessary
+if grep -q ' -lnuma ' ${HWLOC_DIR}/lib/libhwloc.la; then
+    if ! echo '' ${HWLOC_LIBS} '' | grep -q ' numa '; then
+        HWLOC_LIBS="${HWLOC_LIBS} numa"
+    fi
+fi
 
 
 

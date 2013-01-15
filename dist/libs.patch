@@ -1,0 +1,8 @@
+--- hwloc-1.6.1rc1.orig/hwloc.pc.in	2012-11-12 06:33:14.000000000 -0500
++++ hwloc-1.6.1rc1/hwloc.pc.in	2013-01-04 10:09:54.000000000 -0500
+@@ -9,4 +9,4 @@
+ Requires.private: @HWLOC_REQUIRES@
+ Cflags: -I${includedir}
+ Libs: -L${libdir} -lhwloc
+-Libs.private: @LIBS@
++Libs.private: @HWLOC_LIBS@
