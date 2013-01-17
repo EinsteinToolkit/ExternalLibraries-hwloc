@@ -1,9 +1,9 @@
 # Schedule definitions for thorn hwloc
 
-SCHEDULE hwloc_lstopo AT startup
-{
-  LANG: C
-} "Output hardware locality information"
+#SCHEDULE hwloc_lstopo AT startup
+#{
+#  LANG: C
+#} "Output hardware locality information"
 
 SCHEDULE hwloc_system_topology AT startup AFTER hwloc_lstopo BEFORE Driver_Startup
 {

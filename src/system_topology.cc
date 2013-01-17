@@ -1,4 +1,5 @@
 #include <cctk.h>
+#include <cctk_Parameters.h>
 
 #include <algorithm>
 #include <cstdio>
@@ -463,6 +464,8 @@ CCTK_INT hwloc_GetCacheInfo(CCTK_INT* restrict const linesizes,
 extern "C"
 int hwloc_system_topology()
 {
+  DECLARE_CCTK_PARAMETERS;
+  
   // Determine MPI (host/process) mapping
   mpi_host_mapping_t mpi_host_mapping;
   mpi_host_mapping.load();
@@ -530,8 +533,26 @@ int hwloc_system_topology()
   output_bindings(topology);
   // TODO: output distance matrix
   
-  set_bindings(topology, mpi_host_mapping);
-  output_bindings(topology);
+  bool do_set_thread_bindings;
+  if (CCTK_EQUALS(set_thread_bindings, "yes")) {
+    do_set_thread_bindings = true;
+  } else if (CCTK_EQUALS(set_thread_bindings, "no")) {
+    do_set_thread_bindings = false;
+  } else if (CCTK_EQUALS(set_thread_bindings, "auto")) {
+#if defined __MIC__             // Intel MIC
+    do_set_thread_bindings = false;
+#elif defined __bgq__           // Blue Gene/Q
+    do_set_thread_bindings = false;
+#else  // all other systems
+    do_set_thread_bindings = true;
+#endif
+  } else {
+    CCTK_WARN(CCTK_WARN_ABORT, "internal error");
+  }
+  if (do_set_thread_bindings) {
+    set_bindings(topology, mpi_host_mapping);
+    output_bindings(topology);
+  }
   
   // Capture some information for later use
   node_topology_info = new node_topology_info_t;
