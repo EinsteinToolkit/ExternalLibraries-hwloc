@@ -76,7 +76,7 @@ then
     
     # Set locations
     THORN=hwloc
-    NAME=hwloc-1.6.1
+    NAME=hwloc-1.7a1r5312
     SRCDIR=$(dirname $0)
     BUILD_DIR=${SCRATCH_BUILD}/build/${THORN}
     if [ -z "${HWLOC_INSTALL_DIR}" ]; then
@@ -111,6 +111,7 @@ then
         cd ${SCRATCH_BUILD}
         
         # Set up environment
+        export CPPFLAGS="${CPPFLAGS} $(echo $(for dir in ${SYS_INC_DIRS}; do echo '' -I${dir}; done))"
         export LDFLAGS
         unset LIBS
         if echo '' ${ARFLAGS} | grep 64 > /dev/null 2>&1; then
@@ -127,10 +128,17 @@ then
         echo "hwloc: Unpacking archive..."
         pushd ${BUILD_DIR}
         ${TAR?} xzf ${SRCDIR}/dist/${NAME}.tar.gz
-        ${PATCH?} -p0 < ${SRCDIR}/dist/cray.patch
+        ${PATCH?} -p0 < ${SRCDIR}/dist/cray-2.patch
         
         echo "hwloc: Configuring..."
         cd ${NAME}
+        # Provide a special option for Blue Gene/Q; this is a
+        # cross-compile, so we can't easily detect this automatically
+        if $(echo ${CC} | grep -q bgxlc); then
+            bgq='--host=powerpc64-bgq-linux'
+        else
+            bgq=''
+        fi
         # Disable Cairo and XML explicitly, since configure may pick
         # it up if it is installed on the system, but our final link
         # line may not link against these libraries. (We could use our
@@ -140,7 +148,7 @@ then
         else
             handle_pci='--disable-pci'
         fi
-        ./configure --prefix=${HWLOC_DIR} ${handle_pci} --disable-cairo --disable-libxml2
+        ./configure --prefix=${HWLOC_DIR} ${bgq} ${handle_pci} --disable-cairo --disable-libxml2
         
         echo "hwloc: Building..."
         ${MAKE}
@@ -154,7 +162,6 @@ then
         
         date > ${DONE_FILE}
         echo "hwloc: Done."
-        
         )
         
         if (( $? )); then

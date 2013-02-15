@@ -11,6 +11,26 @@
 
 #ifdef HAVE_CAPABILITY_MPI
 #  include <mpi.h>
+
+#  if  defined __bgq__
+// The processor names on a Blue Gene/Q includes the MPI rank, and
+// thus does not uniquely identify the host name. We therefore roll
+// our own.
+// See <https://wiki.alcf.anl.gov/parts/index.php/Blue_Gene/Q>.
+#    include <mpix.h>
+namespace {
+  void MPI_Get_processor_name1(char *name, int *resultlen)
+  {
+    MPIX_Hardware_t hw;
+    MPIX_Hardware(&hw);
+    *resultlen = snprintf(name, MPI_MAX_PROCESSOR_NAME, "(%u,%u,%u,%u,%u)",
+                          hw.Coords[0], hw.Coords[1], hw.Coords[2],
+                          hw.Coords[3], hw.Coords[4]);
+    // ignoring hw.Coords[5], which is the core number inside a node
+  }
+}
+#    define MPI_Get_processor_name MPI_Get_processor_name1
+#  endif
 #endif
 
 #ifdef _OPENMP
@@ -24,10 +44,6 @@ namespace {
 #endif
 
 #include <hwloc.h>
-
-#ifdef __bgq__
-#  include <spi/include/kernel/location.h>
-#endif
 
 using namespace std;
 
@@ -256,30 +272,53 @@ namespace {
     }
     
     CCTK_INFO("Thread CPU bindings:");
+    int const pu_depth = hwloc_get_type_or_below_depth(topology, HWLOC_OBJ_PU);
+    assert(pu_depth>=0);
+    int const num_pus = hwloc_get_nbobjs_by_depth(topology, pu_depth);
+    assert(num_pus>0);
 #pragma omp parallel
     {
       int const num_threads = omp_get_num_threads();
       for (int thread=0; thread<num_threads; ++thread) {
         if (thread == omp_get_thread_num()) {
-          int ierr;
           hwloc_cpuset_t cpuset = hwloc_bitmap_alloc();
-          if (not cpuset) {
+          if (cpuset) {
+            int const ierr =
+              hwloc_get_cpubind(topology, cpuset, HWLOC_CPUBIND_THREAD);
+            if (not ierr) {
+              hwloc_cpuset_t lcpuset = hwloc_bitmap_alloc();
+              if (lcpuset) {
+                for (int pu_num=0; pu_num<num_pus; ++pu_num) {
+                  hwloc_obj_t const pu_obj =
+                    hwloc_get_obj_by_depth(topology, pu_depth, pu_num);
+                  if (hwloc_bitmap_isset(cpuset, pu_obj->os_index)) {
+                    hwloc_bitmap_set(lcpuset, pu_num);
+                  }
+                }
+                char lcpuset_buf[1000];
+                hwloc_bitmap_list_snprintf
+                  (lcpuset_buf, sizeof lcpuset_buf, lcpuset);
+                hwloc_bitmap_free(lcpuset);
+                char cpuset_buf[1000];
+                hwloc_bitmap_list_snprintf
+                  (cpuset_buf, sizeof cpuset_buf, cpuset);
+                printf("OpenMP thread %d: PU set L#{%s} P#{%s}\n",
+                       thread, lcpuset_buf, cpuset_buf);
+              } else {
+                CCTK_VWarn(CCTK_WARN_ALERT, __LINE__, __FILE__,
+                           CCTK_THORNSTRING,
+                           "Could not allocate bitmap for CPU bindings");
+              }
+            } else {
+              CCTK_VWarn(CCTK_WARN_ALERT, __LINE__, __FILE__, CCTK_THORNSTRING,
+                         "Could not obtain CPU binding for thread %d", thread);
+            }
+            hwloc_bitmap_free(cpuset);
+          } else {
             CCTK_VWarn(CCTK_WARN_ALERT, __LINE__, __FILE__, CCTK_THORNSTRING,
                        "Could not allocate bitmap for CPU bindings");
-            goto next;
+
           }
-          ierr = hwloc_get_cpubind(topology, cpuset, HWLOC_CPUBIND_THREAD);
-          if (ierr) {
-            CCTK_VWarn(CCTK_WARN_ALERT, __LINE__, __FILE__, CCTK_THORNSTRING,
-                       "Could not obtain CPU binding for thread %d", thread);
-            goto next_free;
-          }
-          char cpuset_buf[1000];
-          hwloc_bitmap_list_snprintf(cpuset_buf, sizeof cpuset_buf, cpuset);
-          printf("OMP thread %d: PU set P#{%s}\n", thread, cpuset_buf);
-        next_free:
-          hwloc_bitmap_free(cpuset);
-        next:;
         }
 #pragma omp barrier
       }
@@ -303,14 +342,22 @@ namespace {
 #pragma omp parallel
     {
       // All quantities are per host
+      int const core_depth =
+        hwloc_get_type_or_below_depth(topology, HWLOC_OBJ_CORE);
+      assert(core_depth>=0);
+      int const num_cores = hwloc_get_nbobjs_by_depth(topology, core_depth);
+      assert(num_cores>0);
       int const pu_depth =
         hwloc_get_type_or_below_depth(topology, HWLOC_OBJ_PU);
       assert(pu_depth>=0);
       int const num_pus = hwloc_get_nbobjs_by_depth(topology, pu_depth);
       assert(num_pus>0);
+      assert(num_pus % num_cores == 0);
+      int const smt_multiplier = num_pus / num_cores;
       int const num_threads_in_proc = omp_get_num_threads();
       int const num_procs = host_mapping.mpi_num_procs_on_host;
       int const num_threads = num_threads_in_proc * num_procs;
+      int const num_smt_threads = divup(num_threads, num_cores);
       int const proc_num =  host_mapping.mpi_proc_num_on_host;
       int const thread_offset = num_threads_in_proc * proc_num;
       // Bind thread to exactly one PU
@@ -320,14 +367,18 @@ namespace {
       {
         if (thread_num_in_proc == omp_get_thread_num()) {
           int const thread_num = thread_offset + thread_num_in_proc;
-          int const pu_num = thread_num * num_pus / num_threads;
+          int const core_num = thread_num / num_smt_threads;
+          int const pu_offset = thread_num % num_smt_threads;
+          int const pu_num = core_num * smt_multiplier + pu_offset;
+          hwloc_obj_t core_obj =
+            hwloc_get_obj_by_depth(topology, core_depth, core_num);
           hwloc_obj_t pu_obj =
             hwloc_get_obj_by_depth(topology, pu_depth, pu_num);
-          CCTK_VInfo(CCTK_THORNSTRING,
-                     "Binding thread %d of process %d (thread %d on host %d) to PU %d (P#%d)",
-                     thread_num_in_proc, host_mapping.mpi_proc_num,
-                     thread_num, host_mapping.mpi_host_num,
-                     pu_num, pu_obj->os_index);
+          printf("thr %d of proc %d (thr%d on host %d): core L#%d (P#%d), PU L#%d (P#%d)\n",
+                 thread_num_in_proc, host_mapping.mpi_proc_num,
+                 thread_num, host_mapping.mpi_host_num,
+                 core_num, core_obj->os_index,
+                 pu_num, pu_obj->os_index);
           // hwloc_cpuset_t cpuset = hwloc_bitmap_dup(pu_obj->cpuset);
           hwloc_cpuset_t cpuset = pu_obj->cpuset;
           int ierr;
@@ -371,6 +422,7 @@ namespace {
   void node_topology_info_t::load(hwloc_topology_t const& topology,
                                   mpi_host_mapping_t const& mpi_host_mapping)
   {
+    // All quantities are per host
     int const core_depth =
       hwloc_get_type_or_below_depth(topology, HWLOC_OBJ_CORE);
     assert(core_depth>=0);
@@ -381,16 +433,23 @@ namespace {
     assert(pu_depth>=0);
     int const num_pus = hwloc_get_nbobjs_by_depth(topology, pu_depth);
     assert(num_pus>0);
+    assert(num_pus % num_cores == 0);
     int const smt_multiplier = num_pus / num_cores;
     printf("There are %d PUs per core (aka hardware SMT threads)\n",
            smt_multiplier);
-    int const num_cores_in_process =
-      divup(num_cores, mpi_host_mapping.mpi_num_procs_on_host);
-    num_smt_threads = divup(omp_get_max_threads(), num_cores_in_process);
+    int const num_threads_in_proc = omp_get_max_threads();
+    int const num_procs = mpi_host_mapping.mpi_num_procs_on_host;
+    int const num_threads = num_threads_in_proc * num_procs;
+    // TODO: calculate this instead by looking at logical core numbers
+    // for each thread
+    num_smt_threads = divup(num_threads, num_cores);
     printf("There are %d threads per core (aka SMT threads used)\n",
            num_smt_threads);
     if (num_smt_threads > smt_multiplier) {
       printf("WARNING: This is larger than the number of hardware SMT threads\n");
+    }
+    if (num_threads_in_proc % num_smt_threads != 0) {
+      printf("WARNING: This does not evenly divide the number of threads per process\n");
     }
     assert(num_smt_threads > 0);
     
@@ -470,59 +529,6 @@ int hwloc_system_topology()
   mpi_host_mapping_t mpi_host_mapping;
   mpi_host_mapping.load();
   
-#ifdef __bgq__
-  // hwloc 1.6 segfaults on Blue Gene/Q
-  CCTK_INFO("Running on Blue Gene/Q -- not using hwloc");
-  
-  CCTK_INFO("Thread CPU bindings:");
-#pragma omp parallel
-  {
-    int const num_threads = omp_get_num_threads();
-    for (int thread=0; thread<num_threads; ++thread) {
-      if (thread == omp_get_thread_num()) {
-        int ierr;
-        int const core = Kernel_ProcessorCoreID();
-        int const hwthread = Kernel_ProcessorThreadID();
-        int const pu = Kernel_ProcessorID();
-        printf("OMP thread %d: core %d, PU %d, hardware thread %d\n",
-               thread, core, pu, hwthread);
-      }
-#pragma omp barrier
-    }
-  }
-  
-  // Define data structure manually
-  node_topology_info = new node_topology_info_t;
-  int const num_cores_on_host = 16;
-  int const num_cores_in_proc =
-    divup(16, mpi_host_mapping.mpi_num_procs_on_host);
-  node_topology_info->num_smt_threads =
-    divup(omp_get_max_threads(), num_cores_in_proc);
-  
-  {
-    // D1 cache
-    int const size = 16384;
-    int const linesize = 64;
-    int const associativity = 8;
-    node_topology_info_t::cache_info_t new_cache_info;
-    new_cache_info.linesize = linesize;
-    new_cache_info.stride   = size / associativity;
-    node_topology_info->cache_info.push_back(new_cache_info);
-  }
-  {
-    // D2 cache
-    int const size = 32*1024*1024;
-    int const linesize = 128;
-    int const associativity = 16;
-    node_topology_info_t::cache_info_t new_cache_info;
-    new_cache_info.linesize = linesize;
-    new_cache_info.stride   = size / associativity;
-    node_topology_info->cache_info.push_back(new_cache_info);
-  }
-  
-  return 0;
-#endif
-  
   // Determine node topology
   hwloc_topology_t topology;
   hwloc_topology_init(&topology);
@@ -539,13 +545,8 @@ int hwloc_system_topology()
   } else if (CCTK_EQUALS(set_thread_bindings, "no")) {
     do_set_thread_bindings = false;
   } else if (CCTK_EQUALS(set_thread_bindings, "auto")) {
-#if defined __MIC__             // Intel MIC
-    do_set_thread_bindings = false;
-#elif defined __bgq__           // Blue Gene/Q
-    do_set_thread_bindings = false;
-#else  // all other systems
+    // TODO: may want to handle some systems specially here
     do_set_thread_bindings = true;
-#endif
   } else {
     CCTK_WARN(CCTK_WARN_ABORT, "internal error");
   }
