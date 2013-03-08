@@ -408,8 +408,8 @@ namespace {
   struct node_topology_info_t {
     int num_smt_threads;        // threads per core
     struct cache_info_t {
-      int linesize;             // data cache line size in bytes
-      int stride;               // data cache stride in bytes
+      int linesize;             // data cache line size in bytes (0 if unknown)
+      int stride;               // data cache stride in bytes (0 if unknown)
     };
     vector<cache_info_t> cache_info;
     
@@ -482,8 +482,8 @@ namespace {
              cache_attr.linesize,
              cache_attr.associativity,
              cache_stride);
-      assert(cache_attr.linesize > 0);
-      assert(is_pow2(cache_attr.linesize));
+      assert(cache_attr.linesize >= 0);
+      assert(cache_attr.linesize==0 or is_pow2(cache_attr.linesize));
       assert(cache_stride >= 0);
       // Cache strides may not be powers of two
       // assert(cache_stride==0 or is_pow2(cache_stride));
@@ -548,7 +548,7 @@ int hwloc_system_topology()
     // TODO: may want to handle some systems specially here
     do_set_thread_bindings = true;
   } else {
-    CCTK_WARN(CCTK_WARN_ABORT, "internal error");
+    CCTK_BUILTIN_UNREACHABLE();
   }
   if (do_set_thread_bindings) {
     set_bindings(topology, mpi_host_mapping);
