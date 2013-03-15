@@ -148,7 +148,7 @@ then
         else
             handle_pci='--disable-pci'
         fi
-        ./configure --prefix=${HWLOC_DIR} ${bgq} ${handle_pci} --disable-cairo --disable-libxml2
+        ./configure --prefix=${HWLOC_DIR} ${bgq} ${handle_pci} --disable-cairo --disable-libxml2 --enable-shared=no --enable-static=yes
         
         echo "hwloc: Building..."
         ${MAKE}
