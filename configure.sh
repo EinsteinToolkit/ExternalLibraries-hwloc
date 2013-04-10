@@ -76,7 +76,7 @@ then
     
     # Set locations
     THORN=hwloc
-    NAME=hwloc-1.7a1r5312
+    NAME=hwloc-1.7
     SRCDIR=$(dirname $0)
     BUILD_DIR=${SCRATCH_BUILD}/build/${THORN}
     if [ -z "${HWLOC_INSTALL_DIR}" ]; then
@@ -117,8 +117,8 @@ then
         if echo '' ${ARFLAGS} | grep 64 > /dev/null 2>&1; then
             export OBJECT_MODE=64
         fi
-        export HWLOC_PCI_CFLAGS="$(echo $(for dir in ${PCIUTILS_INC_DIRS} ${ZLIB_INC_DIRS}; do echo $dir; done | sed -e 's/^/-I/'))"
-        export HWLOC_PCI_LIBS="$(echo $(for dir in ${PCIUTILS_LIB_DIRS} ${ZLIB_LIB_DIRS}; do echo $dir; done | sed -e 's/^/-L/') $(for dir in ${PCIUTILS_LIBS} ${ZLIB_LIBS}; do echo $dir; done | sed -e 's/^/-l/'))"
+        export HWLOC_PCIUTILS_CFLAGS="$(echo $(for dir in ${PCIUTILS_INC_DIRS} ${ZLIB_INC_DIRS}; do echo $dir; done | sed -e 's/^/-I/'))"
+        export HWLOC_PCIUTILS_LIBS="$(echo $(for dir in ${PCIUTILS_LIB_DIRS} ${ZLIB_LIB_DIRS}; do echo $dir; done | sed -e 's/^/-L/') $(for dir in ${PCIUTILS_LIBS} ${ZLIB_LIBS}; do echo $dir; done | sed -e 's/^/-l/'))"
         
         echo "hwloc: Preparing directory structure..."
         mkdir build external done 2> /dev/null || true
@@ -128,7 +128,7 @@ then
         echo "hwloc: Unpacking archive..."
         pushd ${BUILD_DIR}
         ${TAR?} xzf ${SRCDIR}/dist/${NAME}.tar.gz
-        ${PATCH?} -p0 < ${SRCDIR}/dist/cray-2.patch
+        #${PATCH?} -p0 < ${SRCDIR}/dist/cray-2.patch
         
         echo "hwloc: Configuring..."
         cd ${NAME}
@@ -148,6 +148,8 @@ then
         else
             handle_pci='--disable-pci'
         fi
+        # Disable pciaccess by forcing compiler errors
+        export HWLOC_PCIACCESS_CFLAGS=DISABLE-PCIACCESS
         ./configure --prefix=${HWLOC_DIR} ${bgq} ${handle_pci} --disable-cairo --disable-libxml2 --enable-shared=no --enable-static=yes
         
         echo "hwloc: Building..."
