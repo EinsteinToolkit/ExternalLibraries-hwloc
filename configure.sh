@@ -15,9 +15,7 @@ set -e                          # Abort on errors
 # Search
 ################################################################################
 
-if [ -z "${HWLOC_DIR}" \
-     -o "$(echo "${HWLOC_DIR}" | tr '[a-z]' '[A-Z]')" = 'NO_BUILD' ]
-then
+if [ -z "${HWLOC_DIR}" ]; then
     echo "BEGIN MESSAGE"
     echo "hwloc selected, but HWLOC_DIR not set. Checking some places..."
     echo "END MESSAGE"
