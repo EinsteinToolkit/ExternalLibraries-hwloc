@@ -367,18 +367,25 @@ namespace {
       {
         if (thread_num_in_proc == omp_get_thread_num()) {
           int const thread_num = thread_offset + thread_num_in_proc;
-          int const core_num = thread_num / num_smt_threads;
-          int const pu_offset = thread_num % num_smt_threads;
+          // Map requested threads to existing cores, oversubscribing
+          // if necessary
+          int const core_num =
+            thread_num / num_smt_threads * num_cores /
+            (num_threads / num_smt_threads);
+          assert(core_num < num_cores);
+          // Map requested SMT threads to existing PUs,
+          // oversubscribing if necessary
+          int const pu_offset =
+            thread_num % num_smt_threads * smt_multiplier / num_smt_threads;
+          assert(pu_offset < smt_multiplier);
           int const pu_num = core_num * smt_multiplier + pu_offset;
+          assert(pu_num < num_pus);
           hwloc_obj_t core_obj =
             hwloc_get_obj_by_depth(topology, core_depth, core_num);
+          assert(core_obj);
           hwloc_obj_t pu_obj =
             hwloc_get_obj_by_depth(topology, pu_depth, pu_num);
-          printf("thr %d of proc %d (thr%d on host %d): core L#%d (P#%d), PU L#%d (P#%d)\n",
-                 thread_num_in_proc, host_mapping.mpi_proc_num,
-                 thread_num, host_mapping.mpi_host_num,
-                 core_num, core_obj->os_index,
-                 pu_num, pu_obj->os_index);
+          assert(pu_obj);
           // hwloc_cpuset_t cpuset = hwloc_bitmap_dup(pu_obj->cpuset);
           hwloc_cpuset_t cpuset = pu_obj->cpuset;
           int ierr;
