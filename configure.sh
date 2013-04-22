@@ -25,7 +25,7 @@ if [ -z "${HWLOC_DIR}" ]; then
         # libraries might have different file extensions
         for libext in a so dylib; do
             # libraries can be in /lib or /lib64
-            for libdir in lib64 lib; do
+            for libdir in lib64 lib/x86_64-linux-gnu lib lib/i386-linux-gnu; do
                 FILES="include/hwloc.h $libdir/libhwloc.$libext"
                 # assume this is the one and check all needed files
                 HWLOC_DIR="$dir"
