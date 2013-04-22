@@ -178,6 +178,7 @@ fi
 
 
 # Check that pkg-config works
+export PKG_CONFIG_PATH=${HWLOC_DIR}/lib/pkgconfig:${PCIUTILS_DIR}/lib/pkgconfig:${PKG_CONFIG_PATH}
 if ! pkg-config hwloc; then
     echo "BEGIN MESSAGE"
     echo "pkg-config not found; attempting to use reasonable defaults"
@@ -187,7 +188,6 @@ if ! pkg-config hwloc; then
     HWLOC_LIB_DIRS="${HWLOC_DIR}/lib"
     HWLOC_LIBS='hwloc'
 else
-    export PKG_CONFIG_PATH=${HWLOC_DIR}/lib/pkgconfig:${PCIUTILS_DIR}/lib/pkgconfig:${PKG_CONFIG_PATH}
     HWLOC_INC_DIRS="$(echo '' $(pkg-config hwloc --static --cflags 2>/dev/null || pkg-config hwloc --cflags) '' | sed -e 's+ -I/include + +g;s+ -I/usr/include + +g;s+ -I/usr/local/include + +g' | sed -e 's/ -I/ /g')"
     HWLOC_LIB_DIRS="$(echo '' $(pkg-config hwloc --static --libs 2>/dev/null || pkg-config hwloc --libs) '' | sed -e 's/ -l[^ ]*/ /g' | sed -e 's+ -L/lib + +g;s+ -L/lib64 + +g;s+ -L/usr/lib + +g;s+ -L/usr/lib64 + +g;s+ -L/usr/local/lib + +g;s+ -L/usr/local/lib64 + +g' | sed -e 's/ -L/ /g')"
     HWLOC_LIBS="$(echo '' $(pkg-config hwloc --static --libs 2>/dev/null || pkg-config hwloc --libs) '' | sed -e 's/ -[^l][^ ]*/ /g' | sed -e 's/ -l/ /g')"
