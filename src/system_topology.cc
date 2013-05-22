@@ -13,9 +13,8 @@
 #  include <mpi.h>
 
 #  if  defined __bgq__
-// The processor names on a Blue Gene/Q includes the MPI rank, and
-// thus does not uniquely identify the host name. We therefore roll
-// our own.
+// The processor names on a Blue Gene/Q include the MPI rank, and thus
+// do not uniquely identify the host name. We therefore roll our own.
 // See <https://wiki.alcf.anl.gov/parts/index.php/Blue_Gene/Q>.
 #    include <mpix.h>
 namespace {
@@ -44,6 +43,12 @@ namespace {
 #endif
 
 #include <hwloc.h>
+// On a Blue Gene/Q, hwloc reports per-process hardware information
+// instead of per-node hardware information. We need to correct for
+// this.
+#ifdef __bgq__
+#  define HWLOC_PER_PROCESS
+#endif
 
 using namespace std;
 
@@ -433,12 +438,18 @@ namespace {
     int const core_depth =
       hwloc_get_type_or_below_depth(topology, HWLOC_OBJ_CORE);
     assert(core_depth>=0);
-    int const num_cores = hwloc_get_nbobjs_by_depth(topology, core_depth);
+    int num_cores = hwloc_get_nbobjs_by_depth(topology, core_depth);
+#ifdef HWLOC_PER_PROCESS
+    num_cores *= mpi_host_mapping.mpi_num_procs_on_host;
+#endif
     assert(num_cores>0);
     int const pu_depth =
       hwloc_get_type_or_below_depth(topology, HWLOC_OBJ_PU);
     assert(pu_depth>=0);
-    int const num_pus = hwloc_get_nbobjs_by_depth(topology, pu_depth);
+    int num_pus = hwloc_get_nbobjs_by_depth(topology, pu_depth);
+#ifdef HWLOC_PER_PROCESS
+    num_pus *= mpi_host_mapping.mpi_num_procs_on_host;
+#endif
     assert(num_pus>0);
     assert(num_pus % num_cores == 0);
     int const smt_multiplier = num_pus / num_cores;
@@ -553,7 +564,12 @@ int hwloc_system_topology()
     do_set_thread_bindings = false;
   } else if (CCTK_EQUALS(set_thread_bindings, "auto")) {
     // TODO: may want to handle some systems specially here
+#ifdef HWLOC_PER_PROCESS
+    // The calculation is probably wrong, so don't act on it
+    do_set_thread_bindings = false;
+#else
     do_set_thread_bindings = true;
+#endif
   } else {
     CCTK_BUILTIN_UNREACHABLE();
   }
