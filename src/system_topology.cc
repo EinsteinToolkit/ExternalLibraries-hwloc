@@ -7,6 +7,7 @@
 #include <list>
 #include <map>
 #include <string>
+#include <sstream>
 #include <vector>
 
 #ifdef HAVE_CAPABILITY_MPI
@@ -71,6 +72,86 @@ namespace {
     }
     return true;
   }
+}
+
+
+
+namespace {
+  
+  // Check that OpenMP counts and numbers threads as expected
+  void check_openmp()
+  {
+    bool found_inconsistency = false;
+    
+    // Count OpenMP threads
+    int num_threads_direct = 0;
+#pragma omp parallel reduction(+: num_threads_direct)
+    {
+      ++num_threads_direct;
+    }
+    int num_threads_omp = -1;
+#pragma omp parallel
+    {
+#pragma omp master
+      {
+        num_threads_omp = omp_get_num_threads();
+      }
+    }
+    if (num_threads_direct != num_threads_omp) {
+      found_inconsistency = true;
+      CCTK_VWarn(CCTK_WARN_ALERT, __LINE__, __FILE__, CCTK_THORNSTRING,
+                 "Number of OpenMP threads is inconsistent: counting %d threads, but OpenMP run-time reports %d threads",
+                 num_threads_direct, num_threads_omp);
+    }
+    
+    // Check OpenMP thread numbers
+    vector<int> thread_nums;
+#pragma omp parallel
+    {
+#pragma omp critical
+      {
+        thread_nums.push_back(omp_get_thread_num());
+      }
+    }
+    // Prevent insanity
+    assert(int(thread_nums.size()) == num_threads_direct);
+    int max_thread_num = -1;
+    for (int i=0; i<int(thread_nums.size()); ++i) {
+      max_thread_num = max(max_thread_num, thread_nums.at(i));
+    }
+    vector<int> thread_counts(max_thread_num+1, 0);
+    for (int i=0; i<int(thread_nums.size()); ++i) {
+      ++thread_counts.at(thread_nums.at(i));
+    }
+    int num_threads_direct_again = 0;
+    for (size_t i=0; i<thread_counts.size(); ++i) {
+      num_threads_direct_again += thread_counts.at(i);
+    }
+    // Prevent insanity
+    assert(num_threads_direct_again == num_threads_direct);
+    bool thread_counts_bad = int(thread_counts.size()) < num_threads_direct;
+    for (int i=0; i<int(thread_counts.size()); ++i) {
+      thread_counts_bad = thread_counts_bad or
+        thread_counts.at(i) != (i<num_threads_direct);
+    }
+    if (thread_counts_bad) {
+      found_inconsistency = true;
+      printf("OpenMP thread numbers:");
+      for (int i=0; i<int(thread_counts.size()); ++i) {
+        for (int j=0; j<thread_counts.at(i); ++j) {
+          printf(" %d", i);
+        }
+      }
+      printf("\n");
+      CCTK_WARN(CCTK_WARN_ALERT,
+                "OpenMP threads are numbered inconsistently");
+    }
+    
+    if (found_inconsistency) {
+      CCTK_ERROR("Severe OpenMP inconsistency detected -- aborting");
+    }
+  }
+  
 }
 
 
@@ -267,7 +348,8 @@ namespace {
   
   
   
-  void output_bindings(hwloc_topology_t topology)
+  void output_bindings(hwloc_topology_t topology,
+                       mpi_host_mapping_t const& mpi_host_mapping)
   {
     hwloc_topology_support const* topology_support =
       hwloc_topology_get_support(topology);
@@ -277,57 +359,115 @@ namespace {
     }
     
     CCTK_INFO("Thread CPU bindings:");
-    int const pu_depth = hwloc_get_type_or_below_depth(topology, HWLOC_OBJ_PU);
-    assert(pu_depth>=0);
-    int const num_pus = hwloc_get_nbobjs_by_depth(topology, pu_depth);
-    assert(num_pus>0);
+    // Output all information about host 0
+    int const root = 0;
+    int const host = 0;
+    if (mpi_host_mapping.mpi_proc_num == root) {
+      if (mpi_host_mapping.mpi_host_num != host or
+          mpi_host_mapping.mpi_proc_num_on_host != 0)
+      {
+        CCTK_ERROR("Unexpected host numbering -- root process is not process 0 on host 0");
+      }
+    }
+    if (mpi_host_mapping.mpi_host_num == host) {
+      ostringstream buf;
+      buf << "  "
+          << "MPI process " << mpi_host_mapping.mpi_proc_num << " "
+          << "on host " << mpi_host_mapping.mpi_host_num << " "
+          << "(process " << mpi_host_mapping.mpi_proc_num_on_host << " "
+          << "of " << mpi_host_mapping.mpi_num_procs_on_host << " "
+          << "on this host)\n";
+      
+      int const pu_depth =
+        hwloc_get_type_or_below_depth(topology, HWLOC_OBJ_PU);
+      assert(pu_depth>=0);
+      int const num_pus = hwloc_get_nbobjs_by_depth(topology, pu_depth);
+      assert(num_pus>0);
 #pragma omp parallel
-    {
-      int const num_threads = omp_get_num_threads();
-      for (int thread=0; thread<num_threads; ++thread) {
-        if (thread == omp_get_thread_num()) {
-          hwloc_cpuset_t cpuset = hwloc_bitmap_alloc();
-          if (cpuset) {
-            int const ierr =
-              hwloc_get_cpubind(topology, cpuset, HWLOC_CPUBIND_THREAD);
-            if (not ierr) {
-              hwloc_cpuset_t lcpuset = hwloc_bitmap_alloc();
-              if (lcpuset) {
-                for (int pu_num=0; pu_num<num_pus; ++pu_num) {
-                  hwloc_obj_t const pu_obj =
-                    hwloc_get_obj_by_depth(topology, pu_depth, pu_num);
-                  if (hwloc_bitmap_isset(cpuset, pu_obj->os_index)) {
-                    hwloc_bitmap_set(lcpuset, pu_num);
+      {
+        int const num_threads = omp_get_num_threads();
+        for (int thread=0; thread<num_threads; ++thread) {
+          if (thread == omp_get_thread_num()) {
+            hwloc_cpuset_t cpuset = hwloc_bitmap_alloc();
+            if (cpuset) {
+              int const ierr =
+                hwloc_get_cpubind(topology, cpuset, HWLOC_CPUBIND_THREAD);
+              if (not ierr) {
+                hwloc_cpuset_t lcpuset = hwloc_bitmap_alloc();
+                if (lcpuset) {
+                  for (int pu_num=0; pu_num<num_pus; ++pu_num) {
+                    hwloc_obj_t const pu_obj =
+                      hwloc_get_obj_by_depth(topology, pu_depth, pu_num);
+                    if (hwloc_bitmap_isset(cpuset, pu_obj->os_index)) {
+                      hwloc_bitmap_set(lcpuset, pu_num);
+                    }
                   }
+                  char lcpuset_buf[1000];
+                  hwloc_bitmap_list_snprintf
+                    (lcpuset_buf, sizeof lcpuset_buf, lcpuset);
+                  hwloc_bitmap_free(lcpuset);
+                  char cpuset_buf[1000];
+                  hwloc_bitmap_list_snprintf
+                    (cpuset_buf, sizeof cpuset_buf, cpuset);
+                  // printf("OpenMP thread %d: PU set L#{%s} P#{%s}\n",
+                  //        thread, lcpuset_buf, cpuset_buf);
+                  buf << "    "
+                      << "OpenMP thread " << thread << ": "
+                      << "PU set L#{" << lcpuset_buf << "} "
+                      << "P#{" << cpuset_buf << "}\n";
+                } else {
+                  CCTK_VWarn(CCTK_WARN_ALERT, __LINE__, __FILE__,
+                             CCTK_THORNSTRING,
+                             "Could not allocate bitmap for CPU bindings");
                 }
-                char lcpuset_buf[1000];
-                hwloc_bitmap_list_snprintf
-                  (lcpuset_buf, sizeof lcpuset_buf, lcpuset);
-                hwloc_bitmap_free(lcpuset);
-                char cpuset_buf[1000];
-                hwloc_bitmap_list_snprintf
-                  (cpuset_buf, sizeof cpuset_buf, cpuset);
-                printf("OpenMP thread %d: PU set L#{%s} P#{%s}\n",
-                       thread, lcpuset_buf, cpuset_buf);
               } else {
                 CCTK_VWarn(CCTK_WARN_ALERT, __LINE__, __FILE__,
                            CCTK_THORNSTRING,
-                           "Could not allocate bitmap for CPU bindings");
+                           "Could not obtain CPU binding for thread %d",
+                           thread);
               }
+              hwloc_bitmap_free(cpuset);
             } else {
               CCTK_VWarn(CCTK_WARN_ALERT, __LINE__, __FILE__, CCTK_THORNSTRING,
-                         "Could not obtain CPU binding for thread %d", thread);
+                         "Could not allocate bitmap for CPU bindings");
+              
             }
-            hwloc_bitmap_free(cpuset);
-          } else {
-            CCTK_VWarn(CCTK_WARN_ALERT, __LINE__, __FILE__, CCTK_THORNSTRING,
-                       "Could not allocate bitmap for CPU bindings");
-
           }
-        }
 #pragma omp barrier
+        }
       }
-    }
+      
+      // Collect all output
+      string const bufstr = buf.str();
+      // Output for root process
+      printf("%s", bufstr.c_str());
+#ifdef HAVE_CAPABILITY_MPI
+      // Output for other processes
+      if (mpi_host_mapping.mpi_proc_num == root) {
+        // Receive
+        for (int proc=1; proc<mpi_host_mapping.mpi_num_procs_on_host; ++proc) {
+          int rbuflen;
+          MPI_Recv(&rbuflen, 1, MPI_INT, MPI_ANY_SOURCE, proc,
+                   MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+          vector<char> rbufstr(rbuflen+1);
+          MPI_Recv(&rbufstr[0], rbuflen, MPI_CHAR, MPI_ANY_SOURCE, proc,
+                   MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+          rbufstr[rbuflen] = '\0';
+          printf("%s", &rbufstr[0]);
+        }
+      } else {
+        // Send
+        int const buflen = bufstr.size();
+        MPI_Send(const_cast<int*>(&buflen),
+                 1, MPI_INT, root, mpi_host_mapping.mpi_proc_num_on_host,
+                 MPI_COMM_WORLD);
+        MPI_Send(const_cast<char*>(bufstr.c_str()),
+                 buflen, MPI_CHAR, root, mpi_host_mapping.mpi_proc_num_on_host,
+                 MPI_COMM_WORLD);
+      }
+#endif
+      
+    } // if on root host
   }
   
   
@@ -543,6 +683,9 @@ int hwloc_system_topology()
 {
   DECLARE_CCTK_PARAMETERS;
   
+  // Check OpenMP consistency
+  check_openmp();
+  
   // Determine MPI (host/process) mapping
   mpi_host_mapping_t mpi_host_mapping;
   mpi_host_mapping.load();
@@ -554,7 +697,7 @@ int hwloc_system_topology()
   
   output_support(topology);
   output_objects(topology);
-  output_bindings(topology);
+  output_bindings(topology, mpi_host_mapping);
   // TODO: output distance matrix
   
   bool do_set_thread_bindings;
@@ -571,11 +714,11 @@ int hwloc_system_topology()
     do_set_thread_bindings = true;
 #endif
   } else {
-    CCTK_BUILTIN_UNREACHABLE();
+    __builtin_unreachable();
   }
   if (do_set_thread_bindings) {
     set_bindings(topology, mpi_host_mapping);
-    output_bindings(topology);
+    output_bindings(topology, mpi_host_mapping);
   }
   
   // Capture some information for later use
