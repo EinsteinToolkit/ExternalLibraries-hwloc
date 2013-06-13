@@ -76,7 +76,8 @@ then
     
     # Set locations
     THORN=hwloc
-    NAME=hwloc-1.7
+    #NAME=hwloc-1.7
+    NAME=hwloc-1.7.1
     SRCDIR=$(dirname $0)
     BUILD_DIR=${SCRATCH_BUILD}/build/${THORN}
     if [ -z "${HWLOC_INSTALL_DIR}" ]; then
@@ -119,16 +120,16 @@ then
         fi
         export HWLOC_PCIUTILS_CFLAGS="$(echo $(for dir in ${PCIUTILS_INC_DIRS} ${ZLIB_INC_DIRS}; do echo $dir; done | sed -e 's/^/-I/'))"
         export HWLOC_PCIUTILS_LIBS="$(echo $(for dir in ${PCIUTILS_LIB_DIRS} ${ZLIB_LIB_DIRS}; do echo $dir; done | sed -e 's/^/-L/') $(for dir in ${PCIUTILS_LIBS} ${ZLIB_LIBS}; do echo $dir; done | sed -e 's/^/-l/'))"
-        
         echo "hwloc: Preparing directory structure..."
         mkdir build external done 2> /dev/null || true
         rm -rf ${BUILD_DIR} ${INSTALL_DIR}
         mkdir ${BUILD_DIR} ${INSTALL_DIR}
-        
+
         echo "hwloc: Unpacking archive..."
         pushd ${BUILD_DIR}
         ${TAR?} xzf ${SRCDIR}/dist/${NAME}.tar.gz
-        #${PATCH?} -p0 < ${SRCDIR}/dist/cray-2.patch
+        #${PATCH?} -p0 < ${SRCDIR}/dist/cray.1.7.patch
+        ${PATCH?} -p0 < ${SRCDIR}/dist/cray.1.7.1.patch
         
         echo "hwloc: Configuring..."
         cd ${NAME}
@@ -144,12 +145,12 @@ then
         # line may not link against these libraries. (We could use our
         # own libxml2 library if we want.)
         if test -n "${HAVE_PCIUTILS}"; then
-            handle_pci='--enable-pci'
+            handle_pci='--enable-libpci'
         else
             handle_pci='--disable-pci'
         fi
-        # Disable pciaccess by forcing compiler errors
-        export HWLOC_PCIACCESS_CFLAGS=DISABLE-PCIACCESS
+        ## Disable pciaccess by forcing compiler errors
+        #export HWLOC_PCIACCESS_CFLAGS=DISABLE-PCIACCESS
         ./configure --prefix=${HWLOC_DIR} ${bgq} ${handle_pci} --disable-cairo --disable-libxml2 --enable-shared=no --enable-static=yes
         
         echo "hwloc: Building..."
