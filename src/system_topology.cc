@@ -714,7 +714,7 @@ int hwloc_system_topology()
     do_set_thread_bindings = true;
 #endif
   } else {
-    __builtin_unreachable();
+    CCTK_BUILTIN_UNREACHABLE();
   }
   if (do_set_thread_bindings) {
     set_bindings(topology, mpi_host_mapping);
