@@ -2,6 +2,8 @@
 #include <cctk_Parameters.h>
 
 #include <algorithm>
+#include <cmath>
+#include <complex>
 #include <cstdio>
 #include <cstring>
 #include <list>
@@ -36,7 +38,7 @@ namespace {
 #ifdef _OPENMP
 #  include <omp.h>
 #else
-namespace {
+#  include <sys/time.h>
   int omp_get_max_threads() { return 1; }
   int omp_get_num_threads() { return 1; }
   int omp_get_thread_num() { return 0; }
@@ -482,6 +484,8 @@ namespace {
       return;
     }
     
+    // TODO: set memory binding policy as well
+    
     // TODO: use hwloc_distribute instead
     CCTK_INFO("Setting thread CPU bindings:");
 #pragma omp parallel
@@ -560,8 +564,12 @@ namespace {
   struct node_topology_info_t {
     int num_smt_threads;        // threads per core
     struct cache_info_t {
-      int linesize;             // data cache line size in bytes (0 if unknown)
-      int stride;               // data cache stride in bytes (0 if unknown)
+      char const* name;
+      int type;        // 0=cache, 1=memory
+      ptrdiff_t size;  // data cache size in bytes (0 if unknown)
+      int linesize;    // data cache line size in bytes (0 if unknown)
+      int stride;      // data cache stride in bytes (0 if unknown)
+      int num_pus;     // number of PUs which share this cache
     };
     vector<cache_info_t> cache_info;
     
@@ -574,6 +582,7 @@ namespace {
   void node_topology_info_t::load(hwloc_topology_t const& topology,
                                   mpi_host_mapping_t const& mpi_host_mapping)
   {
+    CCTK_INFO("Extracting CPU/cache/memory properties:");
     // All quantities are per host
     int const core_depth =
       hwloc_get_type_or_below_depth(topology, HWLOC_OBJ_CORE);
@@ -593,7 +602,7 @@ namespace {
     assert(num_pus>0);
     assert(num_pus % num_cores == 0);
     int const smt_multiplier = num_pus / num_cores;
-    printf("There are %d PUs per core (aka hardware SMT threads)\n",
+    printf("  There are %d PUs per core (aka hardware SMT threads)\n",
            smt_multiplier);
     int const num_threads_in_proc = omp_get_max_threads();
     int const num_procs = mpi_host_mapping.mpi_num_procs_on_host;
@@ -601,7 +610,7 @@ namespace {
     // TODO: calculate this instead by looking at logical core numbers
     // for each thread
     num_smt_threads = divup(num_threads, num_cores);
-    printf("There are %d threads per core (aka SMT threads used)\n",
+    printf("  There are %d threads per core (aka SMT threads used)\n",
            num_smt_threads);
     if (num_smt_threads > smt_multiplier) {
       printf("WARNING: This is larger than the number of hardware SMT threads\n");
@@ -616,6 +625,8 @@ namespace {
       int const cache_depth =
         hwloc_get_cache_type_depth(topology, cache_level, HWLOC_OBJ_CACHE_DATA);
       if (cache_depth<0) break;
+      int const num_caches = hwloc_get_nbobjs_by_depth(topology, cache_depth);
+      assert(num_caches>0);
       int const cache_num = 0;    // just look at first cache
       hwloc_obj_t const cache_obj =
         hwloc_get_obj_by_depth(topology, cache_depth, cache_num);
@@ -627,29 +638,89 @@ namespace {
         cache_attr.type == HWLOC_OBJ_CACHE_DATA        ? "data" :
         cache_attr.type == HWLOC_OBJ_CACHE_INSTRUCTION ? "instruction" :
         "UNKNOWN";
+      ostringstream namebuf;
+      switch (cache_attr.type) {
+      case HWLOC_OBJ_CACHE_UNIFIED:     namebuf << "L"; break;
+      case HWLOC_OBJ_CACHE_DATA:        namebuf << "D"; break;
+      case HWLOC_OBJ_CACHE_INSTRUCTION: namebuf << "I"; break;
+      }
+      namebuf << cache_attr.depth << " cache";
+      string const name = namebuf.str();
       int const cache_stride =
         (cache_attr.associativity == 0 ?
          0 :
          cache_attr.size / cache_attr.associativity);
-      printf("Cache %s has type \"%s\" depth %d\n"
-             "   size %td linesize %d associativity %d stride %d\n",
+      printf("  Cache %s has type \"%s\" depth %d\n"
+             "    size %td linesize %d associativity %d stride %d, "
+             "for %d PUs\n",
              cache_obj->name ? cache_obj->name : "(unknown name)",
              cache_type_str,
              cache_attr.depth,
              (ptrdiff_t)cache_attr.size,
              cache_attr.linesize,
              cache_attr.associativity,
-             cache_stride);
-      assert(cache_attr.linesize >= 0);
-      assert(cache_attr.linesize==0 or is_pow2(cache_attr.linesize));
-      assert(cache_stride >= 0);
-      // Cache strides may not be powers of two
-      // assert(cache_stride==0 or is_pow2(cache_stride));
-      cache_info_t new_cache_info;
-      new_cache_info.linesize = cache_attr.linesize;
-      new_cache_info.stride   = cache_stride;
-      cache_info.push_back(new_cache_info);
+             cache_stride,
+             num_pus / num_caches);
+      if (cache_attr.type != HWLOC_OBJ_CACHE_INSTRUCTION) {
+        assert(cache_attr.linesize >= 0);
+        assert(cache_attr.linesize==0 or is_pow2(cache_attr.linesize));
+        assert(cache_stride >= 0);
+        // Cache strides may not be powers of two
+        // assert(cache_stride==0 or is_pow2(cache_stride));
+        cache_info_t new_cache_info;
+        new_cache_info.name     = strdup(name.c_str());
+        new_cache_info.type     = 0; // cache
+        new_cache_info.size     = cache_attr.size;
+        new_cache_info.linesize = cache_attr.linesize;
+        new_cache_info.stride   = cache_stride;
+        new_cache_info.num_pus  = num_pus / num_caches; // TODO
+        cache_info.push_back(new_cache_info);
+      }
     }
+    
+    // Describe (socket-local) memory as well, creating fake cache
+    // entries
+    {
+      int const node_depth = hwloc_get_type_depth(topology, HWLOC_OBJ_NODE);
+      if (node_depth>=0) {
+        int const num_nodes = hwloc_get_nbobjs_by_depth(topology, node_depth);
+        assert(num_nodes>0);
+        int const num_memory_levels = num_nodes==1 ? 1 : 2;
+        int const node_num = 0; // just look at first node
+        hwloc_obj_t const node_obj =
+          hwloc_get_obj_by_depth(topology, node_depth, node_num);
+        assert(node_obj->type == HWLOC_OBJ_NODE);
+        hwloc_obj_memory_s const& memory_attr = node_obj->memory;
+        for (int memory_level=0; memory_level<num_memory_levels; ++memory_level)
+        {
+          int const num_memories = memory_level==0 ? 1 : num_nodes;
+          char const* const name =
+            memory_level==0 ? "local memory" : "global memory";
+          ptrdiff_t const memory_size = memory_attr.local_memory;
+          ptrdiff_t page_size;
+          if (memory_attr.page_types_len > 0) {
+            // Use smallest page size
+            page_size = memory_attr.page_types[0].size;
+          } else {
+            page_size = 0;
+          }
+          printf("  Memory has type \"%s\" depth %d\n"
+                 "    size %td pagesize %td, for %d PUs\n",
+                 memory_level==0 ? "local" : "global",
+                 node_depth, memory_size * num_memories, page_size,
+                 num_pus * num_memories / num_nodes);
+          cache_info_t new_cache_info;
+          new_cache_info.name     = name;
+          new_cache_info.type     = 1; // memory
+          new_cache_info.size     = memory_size * num_memories;
+          new_cache_info.linesize = page_size;
+          new_cache_info.stride   = 0;
+          new_cache_info.num_pus  = num_pus * num_memories / num_nodes; // TODO
+          cache_info.push_back(new_cache_info);
+        }
+      }
+    }
+    
   }
   
 }
@@ -663,17 +734,27 @@ CCTK_INT hwloc_GetNumSMTThreads()
 }
 
 extern "C"
-CCTK_INT hwloc_GetCacheInfo(CCTK_INT* restrict const linesizes,
+CCTK_INT hwloc_GetCacheInfo(CCTK_POINTER_TO_CONST* restrict const names,
+                            CCTK_INT* restrict const types,
+                            CCTK_POINTER_TO_CONST* restrict const sizes,
+                            CCTK_INT* restrict const linesizes,
                             CCTK_INT* restrict const strides,
+                            CCTK_INT* restrict const num_puss,
                             CCTK_INT const max_num_cache_levels)
 {
-  int const num_levels = min(int(max_num_cache_levels),
-                             int(node_topology_info->cache_info.size()));
+  vector<node_topology_info_t::cache_info_t> const& cache_info =
+    node_topology_info->cache_info;
+  
+  int const num_levels = min(int(max_num_cache_levels), int(cache_info.size()));
   for (int level=0; level<num_levels; ++level) {
-    linesizes[level] = node_topology_info->cache_info[level].linesize;
-    strides  [level] = node_topology_info->cache_info[level].stride  ;
+    if (names    ) names    [level] = cache_info[level].name;
+    if (types    ) types    [level] = cache_info[level].type;
+    if (sizes    ) sizes    [level] = (void*)(cache_info[level].size);
+    if (linesizes) linesizes[level] = cache_info[level].linesize;
+    if (strides  ) strides  [level] = cache_info[level].stride;
+    if (num_puss ) num_puss [level] = cache_info[level].num_pus;
   }
-  return node_topology_info->cache_info.size();
+  return cache_info.size();
 }
 
 

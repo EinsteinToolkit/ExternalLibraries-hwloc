@@ -6,7 +6,14 @@ CCTK_INT FUNCTION GetNumSMTThreads()
 PROVIDES FUNCTION GetNumSMTThreads WITH hwloc_GetNumSMTThreads LANGUAGE C
 
 # The ACML library on Kraken already defines a GetCacheInfo
-CCTK_INT FUNCTION GetCacheInfo1(CCTK_INT ARRAY OUT linesizes,            \
-                                CCTK_INT ARRAY OUT strides,              \
-                                CCTK_INT IN max_num_cache_levels)
+# The "sizes" argument is passed as pointer, although it is an integer,
+# since we can't use the type CCTK_INT8 in aliased functions.
+CCTK_INT FUNCTION GetCacheInfo1                            \
+    (CCTK_POINTER_TO_CONST ARRAY OUT names,                \
+     CCTK_INT              ARRAY OUT types,                \
+     CCTK_POINTER_TO_CONST ARRAY OUT sizes,                \
+     CCTK_INT              ARRAY OUT linesizes,            \
+     CCTK_INT              ARRAY OUT strides,              \
+     CCTK_INT              ARRAY OUT num_puss,             \
+     CCTK_INT                    IN  max_num_cache_levels)
 PROVIDES FUNCTION GetCacheInfo1 WITH hwloc_GetCacheInfo LANGUAGE C
