@@ -528,9 +528,6 @@ namespace {
           assert(pu_offset < smt_multiplier);
           int const pu_num = core_num * smt_multiplier + pu_offset;
           assert(pu_num < num_pus);
-          hwloc_obj_t core_obj =
-            hwloc_get_obj_by_depth(topology, core_depth, core_num);
-          assert(core_obj);
           hwloc_obj_t pu_obj =
             hwloc_get_obj_by_depth(topology, pu_depth, pu_num);
           assert(pu_obj);
