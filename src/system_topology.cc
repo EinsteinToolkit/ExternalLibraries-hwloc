@@ -167,6 +167,8 @@ namespace {
     void load();
   };
   
+  mpi_host_mapping_t* mpi_host_mapping = NULL;
+  
 #ifdef HAVE_CAPABILITY_MPI
   
   void mpi_host_mapping_t::load()
@@ -350,7 +352,7 @@ namespace {
   
   
   void output_bindings(hwloc_topology_t topology,
-                       mpi_host_mapping_t const& mpi_host_mapping)
+                       mpi_host_mapping_t const& host_mapping)
   {
     hwloc_topology_support const* topology_support =
       hwloc_topology_get_support(topology);
@@ -363,20 +365,20 @@ namespace {
     // Output all information about host 0
     int const root = 0;
     int const host = 0;
-    if (mpi_host_mapping.mpi_proc_num == root) {
-      if (mpi_host_mapping.mpi_host_num != host or
-          mpi_host_mapping.mpi_proc_num_on_host != 0)
+    if (host_mapping.mpi_proc_num == root) {
+      if (host_mapping.mpi_host_num != host or
+          host_mapping.mpi_proc_num_on_host != 0)
       {
         CCTK_ERROR("Unexpected host numbering -- root process is not process 0 on host 0");
       }
     }
-    if (mpi_host_mapping.mpi_host_num == host) {
+    if (host_mapping.mpi_host_num == host) {
       ostringstream buf;
       buf << "  "
-          << "MPI process " << mpi_host_mapping.mpi_proc_num << " "
-          << "on host " << mpi_host_mapping.mpi_host_num << " "
-          << "(process " << mpi_host_mapping.mpi_proc_num_on_host << " "
-          << "of " << mpi_host_mapping.mpi_num_procs_on_host << " "
+          << "MPI process " << host_mapping.mpi_proc_num << " "
+          << "on host " << host_mapping.mpi_host_num << " "
+          << "(process " << host_mapping.mpi_proc_num_on_host << " "
+          << "of " << host_mapping.mpi_num_procs_on_host << " "
           << "on this host)\n";
       
       int const pu_depth =
@@ -444,9 +446,9 @@ namespace {
       printf("%s", bufstr.c_str());
 #ifdef HAVE_CAPABILITY_MPI
       // Output for other processes
-      if (mpi_host_mapping.mpi_proc_num == root) {
+      if (host_mapping.mpi_proc_num == root) {
         // Receive
-        for (int proc=1; proc<mpi_host_mapping.mpi_num_procs_on_host; ++proc) {
+        for (int proc=1; proc<host_mapping.mpi_num_procs_on_host; ++proc) {
           int rbuflen;
           MPI_Recv(&rbuflen, 1, MPI_INT, MPI_ANY_SOURCE, proc,
                    MPI_COMM_WORLD, MPI_STATUS_IGNORE);
@@ -460,10 +462,10 @@ namespace {
         // Send
         int const buflen = bufstr.size();
         MPI_Send(const_cast<int*>(&buflen),
-                 1, MPI_INT, root, mpi_host_mapping.mpi_proc_num_on_host,
+                 1, MPI_INT, root, host_mapping.mpi_proc_num_on_host,
                  MPI_COMM_WORLD);
         MPI_Send(const_cast<char*>(bufstr.c_str()),
-                 buflen, MPI_CHAR, root, mpi_host_mapping.mpi_proc_num_on_host,
+                 buflen, MPI_CHAR, root, host_mapping.mpi_proc_num_on_host,
                  MPI_COMM_WORLD);
       }
 #endif
@@ -576,7 +578,7 @@ namespace {
   node_topology_info_t* node_topology_info = NULL;
   
   void node_topology_info_t::load(hwloc_topology_t const& topology,
-                                  mpi_host_mapping_t const& mpi_host_mapping)
+                                  mpi_host_mapping_t const& host_mapping)
   {
     CCTK_INFO("Extracting CPU/cache/memory properties:");
     // All quantities are per host
@@ -585,7 +587,7 @@ namespace {
     assert(core_depth>=0);
     int num_cores = hwloc_get_nbobjs_by_depth(topology, core_depth);
 #ifdef HWLOC_PER_PROCESS
-    num_cores *= mpi_host_mapping.mpi_num_procs_on_host;
+    num_cores *= host_mapping.mpi_num_procs_on_host;
 #endif
     assert(num_cores>0);
     int const pu_depth =
@@ -593,7 +595,7 @@ namespace {
     assert(pu_depth>=0);
     int num_pus = hwloc_get_nbobjs_by_depth(topology, pu_depth);
 #ifdef HWLOC_PER_PROCESS
-    num_pus *= mpi_host_mapping.mpi_num_procs_on_host;
+    num_pus *= host_mapping.mpi_num_procs_on_host;
 #endif
     assert(num_pus>0);
     assert(num_pus % num_cores == 0);
@@ -601,7 +603,7 @@ namespace {
     printf("  There are %d PUs per core (aka hardware SMT threads)\n",
            smt_multiplier);
     int const num_threads_in_proc = omp_get_max_threads();
-    int const num_procs = mpi_host_mapping.mpi_num_procs_on_host;
+    int const num_procs = host_mapping.mpi_num_procs_on_host;
     int const num_threads = num_threads_in_proc * num_procs;
     // TODO: calculate this instead by looking at logical core numbers
     // for each thread
@@ -676,8 +678,10 @@ namespace {
     
     // Describe (socket-local) memory as well, creating fake cache
     // entries
-    {
-      int const node_depth = hwloc_get_type_depth(topology, HWLOC_OBJ_NODE);
+    for (int type_idx = 0; type_idx<2; ++type_idx) {
+      hwloc_obj_type_t const obj_type =
+        type_idx==0 ? HWLOC_OBJ_NODE : HWLOC_OBJ_MACHINE;
+      int const node_depth = hwloc_get_type_depth(topology, obj_type);
       if (node_depth>=0) {
         int const num_nodes = hwloc_get_nbobjs_by_depth(topology, node_depth);
         assert(num_nodes>0);
@@ -685,7 +689,7 @@ namespace {
         int const node_num = 0; // just look at first node
         hwloc_obj_t const node_obj =
           hwloc_get_obj_by_depth(topology, node_depth, node_num);
-        assert(node_obj->type == HWLOC_OBJ_NODE);
+        assert(node_obj->type == obj_type);
         hwloc_obj_memory_s const& memory_attr = node_obj->memory;
         for (int memory_level=0; memory_level<num_memory_levels; ++memory_level)
         {
@@ -693,26 +697,28 @@ namespace {
           char const* const name =
             memory_level==0 ? "local memory" : "global memory";
           ptrdiff_t const memory_size = memory_attr.local_memory;
-          ptrdiff_t page_size;
-          if (memory_attr.page_types_len > 0) {
-            // Use smallest page size
-            page_size = memory_attr.page_types[0].size;
-          } else {
-            page_size = 0;
+          if (memory_size > 0) {
+            ptrdiff_t page_size;
+            if (memory_attr.page_types_len > 0) {
+              // Use smallest page size
+              page_size = memory_attr.page_types[0].size;
+            } else {
+              page_size = 0;
+            }
+            printf("  Memory has type \"%s\" depth %d\n"
+                   "    size %td pagesize %td, for %d PUs\n",
+                   memory_level==0 ? "local" : "global",
+                   node_depth, memory_size * num_memories, page_size,
+                   num_pus * num_memories / num_nodes);
+            cache_info_t new_cache_info;
+            new_cache_info.name     = name;
+            new_cache_info.type     = 1; // memory
+            new_cache_info.size     = memory_size * num_memories;
+            new_cache_info.linesize = page_size;
+            new_cache_info.stride   = 0;
+            new_cache_info.num_pus  = num_pus * num_memories / num_nodes; // TODO
+            cache_info.push_back(new_cache_info);
           }
-          printf("  Memory has type \"%s\" depth %d\n"
-                 "    size %td pagesize %td, for %d PUs\n",
-                 memory_level==0 ? "local" : "global",
-                 node_depth, memory_size * num_memories, page_size,
-                 num_pus * num_memories / num_nodes);
-          cache_info_t new_cache_info;
-          new_cache_info.name     = name;
-          new_cache_info.type     = 1; // memory
-          new_cache_info.size     = memory_size * num_memories;
-          new_cache_info.linesize = page_size;
-          new_cache_info.stride   = 0;
-          new_cache_info.num_pus  = num_pus * num_memories / num_nodes; // TODO
-          cache_info.push_back(new_cache_info);
         }
       }
     }
@@ -753,6 +759,23 @@ CCTK_INT hwloc_GetCacheInfo(CCTK_POINTER_TO_CONST* restrict const names,
   return cache_info.size();
 }
 
+extern "C"
+CCTK_INT hwloc_GetMPIProcessInfo(CCTK_INT* restrict const mpi_num_procs,
+                                 CCTK_INT* restrict const mpi_proc_num,
+                                 CCTK_INT* restrict const mpi_num_hosts,
+                                 CCTK_INT* restrict const mpi_host_num,
+                                 CCTK_INT* restrict const mpi_num_procs_on_host,
+                                 CCTK_INT* restrict const mpi_proc_num_on_host)
+{
+  *mpi_num_procs         = mpi_host_mapping->mpi_num_procs;
+  *mpi_proc_num          = mpi_host_mapping->mpi_proc_num;
+  *mpi_num_hosts         = mpi_host_mapping->mpi_num_hosts;
+  *mpi_host_num          = mpi_host_mapping->mpi_host_num;
+  *mpi_num_procs_on_host = mpi_host_mapping->mpi_num_procs_on_host;
+  *mpi_proc_num_on_host  = mpi_host_mapping->mpi_proc_num_on_host;
+  return 0;
+}
+
 
 
 extern "C"
@@ -764,8 +787,8 @@ int hwloc_system_topology()
   check_openmp();
   
   // Determine MPI (host/process) mapping
-  mpi_host_mapping_t mpi_host_mapping;
-  mpi_host_mapping.load();
+  mpi_host_mapping = new mpi_host_mapping_t;
+  mpi_host_mapping->load();
   
   // Determine node topology
   hwloc_topology_t topology;
@@ -774,7 +797,7 @@ int hwloc_system_topology()
   
   output_support(topology);
   output_objects(topology);
-  output_bindings(topology, mpi_host_mapping);
+  output_bindings(topology, *mpi_host_mapping);
   // TODO: output distance matrix
   
   bool do_set_thread_bindings;
@@ -794,13 +817,13 @@ int hwloc_system_topology()
     CCTK_BUILTIN_UNREACHABLE();
   }
   if (do_set_thread_bindings) {
-    set_bindings(topology, mpi_host_mapping);
-    output_bindings(topology, mpi_host_mapping);
+    set_bindings(topology, *mpi_host_mapping);
+    output_bindings(topology, *mpi_host_mapping);
   }
   
   // Capture some information for later use
   node_topology_info = new node_topology_info_t;
-  node_topology_info->load(topology, mpi_host_mapping);
+  node_topology_info->load(topology, *mpi_host_mapping);
   
   hwloc_topology_destroy(topology);
   

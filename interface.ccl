@@ -17,3 +17,12 @@ CCTK_INT FUNCTION GetCacheInfo1                            \
      CCTK_INT              ARRAY OUT num_puss,             \
      CCTK_INT                    IN  max_num_cache_levels)
 PROVIDES FUNCTION GetCacheInfo1 WITH hwloc_GetCacheInfo LANGUAGE C
+
+CCTK_INT FUNCTION GetMPIProcessInfo      \
+    (CCTK_INT OUT mpi_num_procs,         \
+     CCTK_INT OUT mpi_proc_num,          \
+     CCTK_INT OUT mpi_num_hosts,         \
+     CCTK_INT OUT mpi_host_num,          \
+     CCTK_INT OUT mpi_num_procs_on_host, \
+     CCTK_INT OUT mpi_proc_num_on_host)
+PROVIDES FUNCTION GetMPIProcessInfo WITH hwloc_GetMPIProcessInfo LANGUAGE C
