@@ -113,6 +113,7 @@ then
         # Set up environment
         export CPPFLAGS="${CPPFLAGS} $(echo $(for dir in ${SYS_INC_DIRS}; do echo '' -I${dir}; done))"
         export LDFLAGS
+        unset CPP
         unset LIBS
         if echo '' ${ARFLAGS} | grep 64 > /dev/null 2>&1; then
             export OBJECT_MODE=64
@@ -151,7 +152,8 @@ then
         fi
         ## Disable pciaccess by forcing compiler errors
         #export HWLOC_PCIACCESS_CFLAGS=DISABLE-PCIACCESS
-        ./configure --prefix=${HWLOC_DIR} ${bgq} ${handle_pci} --disable-cairo --disable-libxml2 --enable-shared=no --enable-static=yes
+        #./configure --prefix=${HWLOC_DIR} ${bgq} ${handle_pci} --disable-cairo --disable-libxml2 --enable-shared=no --enable-static=yes
+        ./configure --prefix=${HWLOC_DIR} ${bgq} ${handle_pci} --disable-cairo --disable-libxml2 --enable-shared=yes --enable-static=no
         
         echo "hwloc: Building..."
         ${MAKE}
