@@ -503,12 +503,12 @@ namespace {
       int const num_pus = hwloc_get_nbobjs_by_depth(topology, pu_depth);
       assert(num_pus>0);
       assert(num_pus % num_cores == 0);
-      int const smt_multiplier = num_pus / num_cores;
+      int const max_smt_threads = num_pus / num_cores;
       int const num_threads_in_proc = omp_get_num_threads();
       int const num_procs = host_mapping.mpi_num_procs_on_host;
       int const num_threads = num_threads_in_proc * num_procs;
       int const num_smt_threads = divup(num_threads, num_cores);
-      int const proc_num =  host_mapping.mpi_proc_num_on_host;
+      int const proc_num = host_mapping.mpi_proc_num_on_host;
       int const thread_offset = num_threads_in_proc * proc_num;
       // Bind thread to exactly one PU
       for (int thread_num_in_proc=0;
@@ -526,9 +526,9 @@ namespace {
           // Map requested SMT threads to existing PUs,
           // oversubscribing if necessary
           int const pu_offset =
-            thread_num % num_smt_threads * smt_multiplier / num_smt_threads;
-          assert(pu_offset < smt_multiplier);
-          int const pu_num = core_num * smt_multiplier + pu_offset;
+            thread_num % num_smt_threads * max_smt_threads / num_smt_threads;
+          assert(pu_offset < max_smt_threads);
+          int const pu_num = core_num * max_smt_threads + pu_offset;
           assert(pu_num < num_pus);
           hwloc_obj_t pu_obj =
             hwloc_get_obj_by_depth(topology, pu_depth, pu_num);
@@ -559,11 +559,13 @@ namespace {
 
 namespace {
   
+  enum memory_t { mem_cache=0, mem_local=1, mem_global=2 };
   struct node_topology_info_t {
     int num_smt_threads;        // threads per core
+    int max_smt_threads;        // pus per core
     struct cache_info_t {
       char const* name;
-      int type;        // 0=cache, 1=memory
+      memory_t type;
       ptrdiff_t size;  // data cache size in bytes (0 if unknown)
       int linesize;    // data cache line size in bytes (0 if unknown)
       int stride;      // data cache stride in bytes (0 if unknown)
@@ -599,9 +601,9 @@ namespace {
 #endif
     assert(num_pus>0);
     assert(num_pus % num_cores == 0);
-    int const smt_multiplier = num_pus / num_cores;
+    max_smt_threads = num_pus / num_cores;
     printf("  There are %d PUs per core (aka hardware SMT threads)\n",
-           smt_multiplier);
+           max_smt_threads);
     int const num_threads_in_proc = omp_get_max_threads();
     int const num_procs = host_mapping.mpi_num_procs_on_host;
     int const num_threads = num_threads_in_proc * num_procs;
@@ -610,7 +612,7 @@ namespace {
     num_smt_threads = divup(num_threads, num_cores);
     printf("  There are %d threads per core (aka SMT threads used)\n",
            num_smt_threads);
-    if (num_smt_threads > smt_multiplier) {
+    if (num_smt_threads > max_smt_threads) {
       printf("WARNING: This is larger than the number of hardware SMT threads\n");
     }
     if (num_threads_in_proc % num_smt_threads != 0) {
@@ -667,7 +669,7 @@ namespace {
         // assert(cache_stride==0 or is_pow2(cache_stride));
         cache_info_t new_cache_info;
         new_cache_info.name     = strdup(name.c_str());
-        new_cache_info.type     = 0; // cache
+        new_cache_info.type     = mem_cache;
         new_cache_info.size     = cache_attr.size;
         new_cache_info.linesize = cache_attr.linesize;
         new_cache_info.stride   = cache_stride;
@@ -712,7 +714,7 @@ namespace {
                    num_pus * num_memories / num_nodes);
             cache_info_t new_cache_info;
             new_cache_info.name     = name;
-            new_cache_info.type     = 1; // memory
+            new_cache_info.type     = memory_level==0 ? mem_local : mem_global;
             new_cache_info.size     = memory_size * num_memories;
             new_cache_info.linesize = page_size;
             new_cache_info.stride   = 0;
@@ -733,6 +735,12 @@ extern "C"
 CCTK_INT hwloc_GetNumSMTThreads()
 {
   return node_topology_info->num_smt_threads;
+}
+
+extern "C"
+CCTK_INT hwloc_GetMaxSMTThreads()
+{
+  return node_topology_info->max_smt_threads;
 }
 
 extern "C"

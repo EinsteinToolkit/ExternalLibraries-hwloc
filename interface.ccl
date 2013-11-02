@@ -4,10 +4,13 @@ IMPLEMENTS: hwloc
 
 CCTK_INT FUNCTION GetNumSMTThreads()
 PROVIDES FUNCTION GetNumSMTThreads WITH hwloc_GetNumSMTThreads LANGUAGE C
+CCTK_INT FUNCTION GetMaxSMTThreads()
+PROVIDES FUNCTION GetMaxSMTThreads WITH hwloc_GetMaxSMTThreads LANGUAGE C
 
 # The ACML library on Kraken already defines a GetCacheInfo
 # The "sizes" argument is passed as pointer, although it is an integer,
 # since we can't use the type CCTK_INT8 in aliased functions.
+# The "types" are: 0=cache, 1=local memory, 2=NUMA memory.
 CCTK_INT FUNCTION GetCacheInfo1                            \
     (CCTK_POINTER_TO_CONST ARRAY OUT names,                \
      CCTK_INT              ARRAY OUT types,                \
