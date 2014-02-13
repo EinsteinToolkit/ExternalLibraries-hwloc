@@ -216,7 +216,7 @@ else
 fi
 
 # Add libnuma manually, if necessary
-if grep -q '[-]lnuma' ${HWLOC_LIB_DIR}/lib/libhwloc.la; then
+if grep -q '[-]lnuma' ${HWLOC_LIB_DIR}/lib/libhwloc.la 2>/dev/null; then
     if ! echo '' ${HWLOC_LIBS} '' | grep -q ' numa '; then
         HWLOC_LIBS="${HWLOC_LIBS} numa"
     fi
