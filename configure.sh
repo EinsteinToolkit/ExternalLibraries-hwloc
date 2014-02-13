@@ -38,6 +38,7 @@ if [ -z "${HWLOC_DIR}" ]; then
                 done
                 # don't look further if all files have been found
                 if [ -n "$HWLOC_DIR" ]; then
+                    HWLOC_LIB_DIR="$HWLOC_DIR/$libdir"
                     break
                 fi
             done
@@ -106,6 +107,7 @@ then
     fi
     DONE_FILE=${SCRATCH_BUILD}/done/${THORN}
     HWLOC_DIR=${INSTALL_DIR}
+    HWLOC_LIB_DIR=${INSTALL_DIR}/lib
     
     if [ -e ${DONE_FILE} -a ${DONE_FILE} -nt ${SRCDIR}/dist/${NAME}.tar.gz \
                          -a ${DONE_FILE} -nt ${SRCDIR}/configure.sh ]
@@ -198,14 +200,14 @@ fi
 
 
 # Check that pkg-config works
-export PKG_CONFIG_PATH=${HWLOC_DIR}/lib/pkgconfig:${PCIUTILS_DIR}/lib/pkgconfig:${PKG_CONFIG_PATH}
+export PKG_CONFIG_PATH=${HWLOC_LIB_DIR}/pkgconfig:${PCIUTILS_DIR}/lib/pkgconfig:${PKG_CONFIG_PATH}
 if ! pkg-config hwloc; then
     echo "BEGIN MESSAGE"
     echo "pkg-config not found; attempting to use reasonable defaults"
     echo "END MESSAGE"
 
     HWLOC_INC_DIRS="${HWLOC_DIR}/include"
-    HWLOC_LIB_DIRS="${HWLOC_DIR}/lib"
+    HWLOC_LIB_DIRS="${HWLOC_LIB_DIR}"
     HWLOC_LIBS='hwloc'
 else
     HWLOC_INC_DIRS="$(echo '' $(pkg-config hwloc --static --cflags 2>/dev/null || pkg-config hwloc --cflags) '' | sed -e 's+ -I/include + +g;s+ -I/usr/include + +g;s+ -I/usr/local/include + +g' | sed -e 's/ -I/ /g')"
@@ -214,7 +216,7 @@ else
 fi
 
 # Add libnuma manually, if necessary
-if grep -q '[-]lnuma' ${HWLOC_DIR}/lib/libhwloc.la; then
+if grep -q '[-]lnuma' ${HWLOC_LIB_DIR}/lib/libhwloc.la; then
     if ! echo '' ${HWLOC_LIBS} '' | grep -q ' numa '; then
         HWLOC_LIBS="${HWLOC_LIBS} numa"
     fi
