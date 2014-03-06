@@ -478,11 +478,22 @@ namespace {
   void set_bindings(hwloc_topology_t topology,
                     mpi_host_mapping_t const& host_mapping)
   {
+    DECLARE_CCTK_PARAMETERS;
+    
     hwloc_topology_support const* topology_support =
       hwloc_topology_get_support(topology);
     if (not topology_support->cpubind->set_thisthread_cpubind) {
       CCTK_INFO("Cannot set thread CPU bindings");
       return;
+    }
+    
+    bool dense_layout;
+    if (CCTK_EQUALS(thread_layout, "dense")) {
+      dense_layout = true;
+    } else if (CCTK_EQUALS(thread_layout, "loose")) {
+      dense_layout = false;
+    } else {
+      assert(0);
     }
     
     // TODO: set memory binding policy as well
@@ -508,6 +519,8 @@ namespace {
       int const num_procs = host_mapping.mpi_num_procs_on_host;
       int const num_threads = num_threads_in_proc * num_procs;
       int const num_smt_threads = divup(num_threads, num_cores);
+      int const core_spacing =
+        dense_layout ? 1 : num_cores / (num_threads / num_smt_threads);
       int const proc_num = host_mapping.mpi_proc_num_on_host;
       int const thread_offset = num_threads_in_proc * proc_num;
       // Bind thread to exactly one PU
@@ -518,10 +531,8 @@ namespace {
         if (thread_num_in_proc == omp_get_thread_num()) {
           int const thread_num = thread_offset + thread_num_in_proc;
           // Map requested threads to existing cores, oversubscribing
-          // if necessary
-          int const core_num =
-            thread_num / num_smt_threads * num_cores /
-            (num_threads / num_smt_threads);
+          // or spacing if necessary
+          int const core_num = thread_num / num_smt_threads * core_spacing;
           assert(core_num < num_cores);
           // Map requested SMT threads to existing PUs,
           // oversubscribing if necessary
@@ -536,8 +547,8 @@ namespace {
           // hwloc_cpuset_t cpuset = hwloc_bitmap_dup(pu_obj->cpuset);
           hwloc_cpuset_t cpuset = pu_obj->cpuset;
           int ierr;
-          ierr = hwloc_set_cpubind(topology, cpuset,
-                                   HWLOC_CPUBIND_THREAD | HWLOC_CPUBIND_STRICT);
+          ierr = hwloc_set_cpubind
+            (topology, cpuset, HWLOC_CPUBIND_THREAD | HWLOC_CPUBIND_STRICT);
           if (ierr) {
             ierr = hwloc_set_cpubind(topology, cpuset, HWLOC_CPUBIND_THREAD);
           }
