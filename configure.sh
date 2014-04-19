@@ -196,6 +196,10 @@ then
         fi
     fi
     
+else
+    
+    HWLOC_LIB_DIR=${HWLOC_DIR}/lib
+
 fi
 
 
