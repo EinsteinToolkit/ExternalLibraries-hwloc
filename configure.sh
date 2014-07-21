@@ -61,6 +61,16 @@ if [ -z "${HWLOC_DIR}" ]; then
         echo "BEGIN MESSAGE"
         echo "Found hwloc in ${HWLOC_DIR}"
         echo "END MESSAGE"
+        # Check that version is sufficient
+        export PKG_CONFIG_PATH=${HWLOC_LIB_DIR}/pkgconfig:${PCIUTILS_DIR}/lib/pkgconfig:${PKG_CONFIG_PATH}
+        if pkg-config hwloc; then
+            if [[ `pkg-config --modversion hwloc` < '1.6' ]]; then
+                echo "BEGIN MESSAGE"
+                echo "hwloc too old (require at least version 1.6)"
+                echo "END MESSAGE"
+                HWLOC_DIR='BUILD'
+            fi
+        fi
     fi
 fi
 
