@@ -105,7 +105,7 @@ then
     # Set locations
     THORN=hwloc
     NAME=hwloc-1.7.2
-    SRCDIR=$(dirname $0)
+    SRCDIR="$(dirname $0)"
     BUILD_DIR=${SCRATCH_BUILD}/build/${THORN}
     if [ -z "${HWLOC_INSTALL_DIR}" ]; then
         INSTALL_DIR=${SCRATCH_BUILD}/external/${THORN}
@@ -147,8 +147,8 @@ then
         if echo '' ${ARFLAGS} | grep 64 > /dev/null 2>&1; then
             export OBJECT_MODE=64
         fi
-        export HWLOC_PCIUTILS_CFLAGS="$(echo $(for dir in ${PCIUTILS_INC_DIRS} ${ZLIB_INC_DIRS}; do echo $dir; done | sed -e 's/^/-I/'))"
-        export HWLOC_PCIUTILS_LIBS="$(echo $(for dir in ${PCIUTILS_LIB_DIRS} ${ZLIB_LIB_DIRS}; do echo $dir; done | sed -e 's/^/-L/') $(for dir in ${PCIUTILS_LIBS} ${ZLIB_LIBS}; do echo $dir; done | sed -e 's/^/-l/'))"
+        export HWLOC_PCIUTILS_CFLAGS="$(echo '' $(for dir in ${PCIUTILS_INC_DIRS} ${ZLIB_INC_DIRS}; do echo '' $dir; done | sed -e 's/^ /-I/'))"
+        export HWLOC_PCIUTILS_LIBS="$(echo '' $(for dir in ${PCIUTILS_LIB_DIRS} ${ZLIB_LIB_DIRS}; do echo '' $dir; done | sed -e 's/^ /-L/') $(for dir in ${PCIUTILS_LIBS} ${ZLIB_LIBS}; do echo '' $dir; done | sed -e 's/^ /-l/'))"
         echo "hwloc: Preparing directory structure..."
         mkdir build external done 2> /dev/null || true
         rm -rf ${BUILD_DIR} ${INSTALL_DIR}
@@ -165,7 +165,7 @@ then
         cd ${NAME}
         # Provide a special option for Blue Gene/Q; this is a
         # cross-compile, so we can't easily detect this automatically
-        if $(echo ${CC} | grep -q bgxlc); then
+        if echo ${CC} | grep -q bgxlc; then
             bgq='--host=powerpc64-bgq-linux'
         else
             bgq=''
@@ -224,9 +224,16 @@ if ! pkg-config hwloc; then
     HWLOC_LIB_DIRS="${HWLOC_LIB_DIR}"
     HWLOC_LIBS='hwloc'
 else
-    HWLOC_INC_DIRS="$(echo '' $(pkg-config hwloc --static --cflags 2>/dev/null || pkg-config hwloc --cflags) '' | sed -e 's+ -I/include + +g;s+ -I/usr/include + +g;s+ -I/usr/local/include + +g' | sed -e 's/ -I/ /g')"
-    HWLOC_LIB_DIRS="$(echo '' $(pkg-config hwloc --static --libs 2>/dev/null || pkg-config hwloc --libs) '' | sed -e 's/ -l[^ ]*/ /g' | sed -e 's+ -L/lib + +g;s+ -L/lib64 + +g;s+ -L/usr/lib + +g;s+ -L/usr/lib64 + +g;s+ -L/usr/local/lib + +g;s+ -L/usr/local/lib64 + +g' | sed -e 's/ -L/ /g')"
-    HWLOC_LIBS="$(echo '' $(pkg-config hwloc --static --libs 2>/dev/null || pkg-config hwloc --libs) '' | sed -e 's/ -[^l][^ ]*/ /g' | sed -e 's/ -l/ /g')"
+    inc_dirs="$(pkg-config hwloc --static --cflags 2>/dev/null || pkg-config hwloc --cflags)"
+    lib_dirs="$(pkg-config hwloc --static --libs 2>/dev/null || pkg-config hwloc --libs)"
+    libs="$(pkg-config hwloc --static --libs 2>/dev/null || pkg-config hwloc --libs)"
+    # Translate option flags into Cactus options:
+    # - for INC_DIRS, remove -I prefix from flags
+    # - for LIB_DIRS, remove all -l flags, and remove -L prefix from flags
+    # - for LIBS, keep only -l flags, and remove -l prefix from flags
+    HWLOC_INC_DIRS="$(echo '' $(for flag in $inc_dirs; do echo '' $flag; done | sed -e 's/^ -I//'))"
+    HWLOC_LIB_DIRS="$(echo '' $(for flag in $lib_dirs; do echo '' $flag; done | grep -v '^ -l' | sed -e 's/^ -L//'))"
+    HWLOC_LIBS="$(echo '' $(for flag in $libs; do echo '' $flag; done | grep '^ -l' | sed -e 's/^ -l//'))"
 fi
 
 # Add libnuma manually, if necessary
@@ -242,9 +249,11 @@ fi
 # Configure Cactus
 ################################################################################
 
+HWLOC_INC_DIRS="$(${CCTK_HOME}/lib/sbin/strip-incdirs.sh ${HWLOC_INC_DIRS})"
+HWLOC_LIB_DIRS="$(${CCTK_HOME}/lib/sbin/strip-libdirs.sh ${HWLOC_LIB_DIRS})"
+
 # Pass options to Cactus
 echo "BEGIN MAKE_DEFINITION"
-echo "HAVE_HWLOC     = 1"
 echo "HWLOC_DIR      = ${HWLOC_DIR}"
 echo "HWLOC_INC_DIRS = ${HWLOC_INC_DIRS}"
 echo "HWLOC_LIB_DIRS = ${HWLOC_LIB_DIRS}"
