@@ -174,7 +174,7 @@ then
         # it up if it is installed on the system, but our final link
         # line may not link against these libraries. (We could use our
         # own libxml2 library if we want.)
-        if test -n "${HAVE_PCIUTILS}"; then
+        if test -n "${HAVE_CAPABILITY_PCIUTILS}"; then
             handle_pci='--enable-libpci'
         else
             handle_pci='--disable-pci'
