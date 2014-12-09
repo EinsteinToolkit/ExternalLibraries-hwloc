@@ -8,7 +8,7 @@ OPTIONAL pciutils
 
 PROVIDES hwloc
 {
-  SCRIPT configure.sh
+  SCRIPT src/detect.sh
   LANG bash
   OPTIONS HWLOC_DIR HWLOC_INSTALL_DIR
 }
