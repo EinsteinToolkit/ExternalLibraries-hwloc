@@ -38,7 +38,7 @@ if [ -z "${HWLOC_DIR}" ]; then
                 done
                 # don't look further if all files have been found
                 if [ -n "$HWLOC_DIR" ]; then
-                    HWLOC_LIB_DIR="$HWLOC_DIR/$libdir"
+                    hwloc_lib_dir="$HWLOC_DIR/$libdir"
                     break
                 fi
             done
@@ -62,7 +62,7 @@ if [ -z "${HWLOC_DIR}" ]; then
         echo "Found hwloc in ${HWLOC_DIR}"
         echo "END MESSAGE"
         # Check that version is sufficient
-        export PKG_CONFIG_PATH=${HWLOC_LIB_DIR}/pkgconfig:${PCIUTILS_DIR}/lib/pkgconfig:${PKG_CONFIG_PATH}
+        export PKG_CONFIG_PATH=${hwloc_lib_dir}/pkgconfig:${PCIUTILS_DIR}/lib/pkgconfig:${PKG_CONFIG_PATH}
         if pkg-config hwloc; then
             if [[ `pkg-config --modversion hwloc` < '1.6' ]]; then
                 echo "BEGIN MESSAGE"
@@ -127,8 +127,12 @@ else
     mkdir ${SCRATCH_BUILD}/done 2> /dev/null || true
     date > ${DONE_FILE}
     
+    if [ -z "${hwloc_lib_dir}" ]; then
+        hwloc_lib_dir="${HWLOC_DIR}/lib"
+    fi
+    
     # Check whether pkg-config works
-    export PKG_CONFIG_PATH=${HWLOC_LIB_DIR}/pkgconfig:${PCIUTILS_DIR}/lib/pkgconfig:${PKG_CONFIG_PATH}
+    export PKG_CONFIG_PATH=${hwloc_lib_dir}/pkgconfig:${PCIUTILS_DIR}/lib/pkgconfig:${PKG_CONFIG_PATH}
     if ! pkg-config hwloc; then
         echo "BEGIN MESSAGE"
         echo "pkg-config not found; attempting to use reasonable defaults"
@@ -151,7 +155,7 @@ else
     fi
     
     # Add libnuma manually, if necessary
-    if grep -q '[-]lnuma' ${HWLOC_LIB_DIR}/libhwloc.la 2>/dev/null; then
+    if grep -q '[-]lnuma' ${hwloc_lib_dir}/libhwloc.la 2>/dev/null; then
         if ! echo '' ${HWLOC_LIBS} '' | grep -q ' numa '; then
             HWLOC_LIBS="${HWLOC_LIBS} numa"
         fi
@@ -172,6 +176,7 @@ echo "END MAKE_DEFINITION"
 
 HWLOC_INC_DIRS="$(${CCTK_HOME}/lib/sbin/strip-incdirs.sh ${HWLOC_INC_DIRS})"
 HWLOC_LIB_DIRS="$(${CCTK_HOME}/lib/sbin/strip-libdirs.sh ${HWLOC_LIB_DIRS})"
+HWLOC_LIBS="${HWLOC_LIBS} ${HWLOC_EXTRA_LIBS}"
 
 # Pass options to Cactus
 echo "BEGIN MAKE_DEFINITION"
