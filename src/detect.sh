@@ -62,14 +62,17 @@ if [ -z "${HWLOC_DIR}" ]; then
         echo "Found hwloc in ${HWLOC_DIR}"
         echo "END MESSAGE"
         # Check that version is sufficient
-        export PKG_CONFIG_PATH=${hwloc_lib_dir}/pkgconfig:${PCIUTILS_DIR}/lib/pkgconfig:${PKG_CONFIG_PATH}
-        if pkg-config hwloc; then
-            if [[ `pkg-config --modversion hwloc` < '1.6' ]]; then
-                echo "BEGIN MESSAGE"
-                echo "hwloc too old (require at least version 1.6)"
-                echo "END MESSAGE"
-                HWLOC_DIR='BUILD'
-            fi
+        export PKG_CONFIG_PATH=${hwloc_lib_dir}/pkgconfig:${PKG_CONFIG_PATH}
+        # we negate the return code since in perl true == 1 but for the shell true == 0
+        if ( pkg-config hwloc && pkg-config --modversion hwloc | 
+               perl -ne 'm/^0*(\d+)[.]0*(\d+)/; exit !($1 < 1 or $2 < 6)' ) || \
+           ( [ -r ${HWLOC_DIR}/include/hwloc.h ] &&
+             perl -ne 'exit !($1 lt "0x00010600") if m/^#define HWLOC_API_VERSION (.*)/' \
+               ${HWLOC_DIR}/include/hwloc.h ) ; then
+            echo "BEGIN MESSAGE"
+            echo "hwloc too old (require at least version 1.6)"
+            echo "END MESSAGE"
+            HWLOC_DIR='BUILD'
         fi
     fi
 fi
