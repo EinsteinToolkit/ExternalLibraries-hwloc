@@ -33,6 +33,7 @@ export CPPFLAGS="${CPPFLAGS} $(echo $(for dir in ${SYS_INC_DIRS}; do echo '' -I$
 export LDFLAGS
 unset CPP
 unset LIBS
+unset LD
 if echo '' ${ARFLAGS} | grep 64 > /dev/null 2>&1; then
     export OBJECT_MODE=64
 fi
