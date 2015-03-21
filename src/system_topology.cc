@@ -654,6 +654,7 @@ namespace {
       case HWLOC_OBJ_CACHE_UNIFIED:     namebuf << "L"; break;
       case HWLOC_OBJ_CACHE_DATA:        namebuf << "D"; break;
       case HWLOC_OBJ_CACHE_INSTRUCTION: namebuf << "I"; break;
+      default:  namebuf << "?"; break;
       }
       namebuf << cache_attr.depth << " cache";
       string const name = namebuf.str();
@@ -661,8 +662,8 @@ namespace {
         (cache_attr.associativity == 0 ?
          0 :
          cache_attr.size / cache_attr.associativity);
-      printf("  Cache %s has type \"%s\" depth %d\n"
-             "    size %td linesize %d associativity %d stride %d, "
+      printf("  Cache %s has type \"%s\" depth %u\n"
+             "    size %td linesize %u associativity %d stride %d, "
              "for %d PUs\n",
              cache_obj->name ? cache_obj->name : "(unknown name)",
              cache_type_str,
@@ -673,7 +674,7 @@ namespace {
              cache_stride,
              num_pus / num_caches);
       if (cache_attr.type != HWLOC_OBJ_CACHE_INSTRUCTION) {
-        assert(cache_attr.linesize >= 0);
+        // assert(cache_attr.linesize >= 0); // linesize is unsigned
         assert(cache_attr.linesize==0 or is_pow2(cache_attr.linesize));
         assert(cache_stride >= 0);
         // Cache strides may not be powers of two
