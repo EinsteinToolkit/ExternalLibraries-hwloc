@@ -14,7 +14,7 @@ set -e                          # Abort on errors
 
 # Set locations
 THORN=hwloc
-NAME=hwloc-1.7.2
+NAME=hwloc-1.10.1
 SRCDIR="$(dirname $0)"
 BUILD_DIR=${SCRATCH_BUILD}/build/${THORN}
 if [ -z "${HWLOC_INSTALL_DIR}" ]; then
@@ -48,7 +48,6 @@ mkdir ${BUILD_DIR} ${INSTALL_DIR}
 echo "hwloc: Unpacking archive..."
 pushd ${BUILD_DIR}
 ${TAR?} xzf ${SRCDIR}/../dist/${NAME}.tar.gz
-${PATCH?} -p0 < ${SRCDIR}/../dist/cray.1.7.2.patch
 
 echo "hwloc: Configuring..."
 cd ${NAME}

@@ -109,7 +109,7 @@ then
 
     # Set locations
     THORN=hwloc
-    NAME=hwloc-1.7.2
+    NAME=hwloc-1.10.1
     SRCDIR="$(dirname $0)"
     BUILD_DIR=${SCRATCH_BUILD}/build/${THORN}
     if [ -z "${HWLOC_INSTALL_DIR}" ]; then
