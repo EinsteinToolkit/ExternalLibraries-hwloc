@@ -3,7 +3,7 @@
 CFLAGS += -DHWLOC_UTILPATH='$(CCTK_HOME)/exe/$(notdir $(TOP))'
 
 # Source files in this directory
-SRCS = system_topology.cc # lstopo.c
+SRCS = # lstopo.c
 
 # Subdirectories containing source files
 SUBDIRS = 
