@@ -69,9 +69,7 @@ else
 fi
 ## Disable pciaccess by forcing compiler errors
 #export HWLOC_PCIACCESS_CFLAGS=DISABLE-PCIACCESS
-./configure --prefix=${HWLOC_DIR} ${bgq} ${handle_pci} --disable-cairo --disable-libxml2 --enable-shared=no --enable-static=yes
-#./configure --prefix=${HWLOC_DIR} ${bgq} ${handle_pci} --disable-cairo --disable-libxml2 --disable-cuda --disable-opencl --enable-shared=yes --enable-static=no
-#./configure --prefix=${HWLOC_DIR} ${bgq} ${handle_pci} --disable-cairo --disable-libxml2 --disable-cuda --disable-opencl --enable-shared=yes --enable-static=yes
+./configure --prefix=${HWLOC_DIR} ${bgq} ${handle_pci} --disable-cairo --disable-libxml2 --disable-cuda --disable-opencl --enable-shared=no --enable-static=yes
 
 echo "hwloc: Building..."
 ${MAKE}
