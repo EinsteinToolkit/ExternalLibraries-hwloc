@@ -23,8 +23,8 @@ if [ -z "${HWLOC_DIR}" ]; then
     DIRS="/usr /usr/local /usr/local/packages /usr/local/apps /opt/local ${HOME} c:/packages"
     for dir in $DIRS; do
         # libraries might have different file extensions
-        for libext in a so dylib; do
-            # libraries can be in /lib or /lib64
+        for libext in a dll dll.a dylib lib so; do
+            # libraries can be in lib or lib64 (or libx32?)
             for libdir in lib64 lib/x86_64-linux-gnu lib lib/i386-linux-gnu; do
                 FILES="include/hwloc.h $libdir/libhwloc.$libext"
                 # assume this is the one and check all needed files
