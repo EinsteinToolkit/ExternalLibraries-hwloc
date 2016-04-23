@@ -127,8 +127,10 @@ then
 else
     THORN=hwloc
     DONE_FILE=${SCRATCH_BUILD}/done/${THORN}
-    mkdir ${SCRATCH_BUILD}/done 2> /dev/null || true
-    date > ${DONE_FILE}
+    if [ ! -e ${DONE_FILE} ]; then
+        mkdir ${SCRATCH_BUILD}/done 2> /dev/null || true
+        date > ${DONE_FILE}
+    fi
     
     if [ -z "${hwloc_lib_dir}" ]; then
         hwloc_lib_dir="${HWLOC_DIR}/lib"
