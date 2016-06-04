@@ -30,7 +30,7 @@ HWLOC_DIR=${INSTALL_DIR}
 
 # Set up environment
 export CPPFLAGS="${CPPFLAGS} $(echo $(for dir in ${SYS_INC_DIRS}; do echo '' -I${dir}; done))"
-export LDFLAGS
+export LDFLAGS="${LDFLAGS} $(echo $(for dir in ${LIBDIRS}; do echo '' -L${dir} -Wl,-rpath,${dir}; done))"
 unset CPP
 unset LIBS
 unset LD
