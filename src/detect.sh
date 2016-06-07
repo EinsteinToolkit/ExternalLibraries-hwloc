@@ -77,6 +77,8 @@ if [ -z "${HWLOC_DIR}" ]; then
     fi
 fi
 
+THORN=hwloc
+
 ################################################################################
 # Build
 ################################################################################
@@ -108,7 +110,6 @@ then
     fi
 
     # Set locations
-    THORN=hwloc
     NAME=hwloc-1.10.1
     SRCDIR="$(dirname $0)"
     BUILD_DIR=${SCRATCH_BUILD}/build/${THORN}
@@ -120,12 +121,13 @@ then
         echo "END MESSAGE"
         INSTALL_DIR=${HWLOC_INSTALL_DIR}
     fi
+    HWLOC_BUILD=1
     HWLOC_DIR=${INSTALL_DIR}
     HWLOC_INC_DIRS="${HWLOC_DIR}/include"
     HWLOC_LIB_DIRS="${HWLOC_DIR}/lib"
     HWLOC_LIBS='hwloc'
 else
-    THORN=hwloc
+    HWLOC_BUILD=
     DONE_FILE=${SCRATCH_BUILD}/done/${THORN}
     if [ ! -e ${DONE_FILE} ]; then
         mkdir ${SCRATCH_BUILD}/done 2> /dev/null || true
@@ -176,6 +178,7 @@ fi
 
 # Pass configuration options to build script
 echo "BEGIN MAKE_DEFINITION"
+echo "HWLOC_BUILD       = ${HWLOC_BUILD}"
 echo "HWLOC_INSTALL_DIR = ${HWLOC_INSTALL_DIR}"
 echo "END MAKE_DEFINITION"
 
