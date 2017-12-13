@@ -20,6 +20,7 @@ if [ -z "${HWLOC_DIR}" ]; then
     echo "hwloc selected, but HWLOC_DIR not set. Checking some places..."
     echo "END MESSAGE"
     
+<<<<<<<
     DIRS="/usr /usr/local /usr/local/packages /usr/local/apps /opt/local ${HOME} c:/packages"
     for dir in $DIRS; do
         # libraries might have different file extensions
@@ -50,8 +51,82 @@ if [ -z "${HWLOC_DIR}" ]; then
         # don't look further if all files have been found
         if [ -n "$HWLOC_DIR" ]; then
             break
+=======
+    # Check whether pkg-config works
+    export PKG_CONFIG_PATH=pkgconfig:${PCIUTILS_DIR}/lib/pkgconfig:${PKG_CONFIG_PATH}
+    if pkg-config hwloc; then
+        # Check that version is sufficient
+        # we negate the return code since in perl true == 1 but for the shell true == 0
+        if pkg-config --modversion hwloc | 
+          perl -ne 'm/^0*(\d+)[.]0*(\d+)/; exit !($1>1 or $1==1 and $2>=6)' ; then 
+            inc_dirs="$(pkg-config hwloc --static --cflags 2>/dev/null || pkg-config hwloc --cflags)"
+            lib_dirs="$(pkg-config hwloc --static --libs 2>/dev/null || pkg-config hwloc --libs)"
+            libs="$(pkg-config hwloc --static --libs 2>/dev/null || pkg-config hwloc --libs)"
+            # Translate option flags into Cactus options:
+            # - for INC_DIRS, remove -I prefix from flags
+            # - for LIB_DIRS, remove all -l flags, and remove -L prefix from flags
+            # - for LIBS, keep only -l flags, and remove -l prefix from flags
+            HWLOC_INC_DIRS="$(echo '' $(for flag in $inc_dirs; do echo '' $flag; done | sed -e 's/^ -I//'))"
+            HWLOC_LIB_DIRS="$(echo '' $(for flag in $lib_dirs; do echo '' $flag; done | grep -v '^ -l' | sed -e 's/^ -L//'))"
+            HWLOC_LIBS="$(echo '' $(for flag in $libs; do echo '' $flag; done | grep '^ -l' | sed -e 's/^ -l//'))"
+            HWLOC_DIR="$(echo ${HWLOC_INC_DIRS} NO_BUILD | sed 's!/[^/]* *!!')"
+        else
+            echo "BEGIN MESSAGE"
+            echo "hwloc in ${HWLOC_DIR} too old (require at least version 1.6)"
+            echo "END MESSAGE"    
+>>>>>>>
         fi
-    done
+    else
+      echo "BEGIN MESSAGE"
+      echo "pkg-config not found; attempting to use reasonable defaults"
+      echo "END MESSAGE"
+        
+      DIRS="/usr /usr/local /usr/local/packages /usr/local/apps /opt/local ${HOME} c:/packages"
+      for dir in $DIRS; do
+          # libraries might have different file extensions
+          for libext in a so dylib; do
+              # libraries can be in /lib or /lib64
+              for libdir in lib64 lib/x86_64-linux-gnu lib lib/i386-linux-gnu; do
+                  FILES="include/hwloc.h $libdir/libhwloc.$libext"
+                  HWLOC_DIR="$dir"
+                  HWLOC_LIB_DIRS="$dir/$libdir"
+                  HWLOC_INC_DIRS="$dir/include"
+                  for file in $FILES; do
+                      # discard this directory if one file was not found
+                      if [ ! -r "$dir/$file" ]; then
+                          unset HWLOC_DIR
+                          unset HWLOC_LIB_DIRS
+                          unset HWLOC_INC_DIRS
+                          break
+                      fi
+                  done
+                  # Check that version is sufficient
+                  if [ -r ${HWLOC_INC_DIRS}/hwloc.h ] &&
+                    perl -ne 'exit !($1 lt "0x00010600") if m/^#define HWLOC_API_VERSION (.*)/' \
+                      ${HWLOC_INC_DIRS}/hwloc.h ; then
+                      echo "BEGIN MESSAGE"
+                      echo "hwloc in ${HWLOC_DIR} too old (require at least version 1.6)"
+                      echo "END MESSAGE"
+                      unset HWLOC_DIR
+                      unset HWLOC_LIB_DIRS
+                      unset HWLOC_INC_DIRS
+                  fi
+                  # don't look further if all files have been found
+                  if [ -n "$HWLOC_DIR" ]; then
+                      break
+                  fi
+              done
+              # don't look further if all files have been found
+              if [ -n "$HWLOC_DIR" ]; then
+                  break
+              fi
+          done
+          # don't look further if all files have been found
+          if [ -n "$HWLOC_DIR" ]; then
+              break
+          fi
+      done
+    fi
     
     if [ -z "$HWLOC_DIR" ]; then
         echo "BEGIN MESSAGE"
@@ -61,19 +136,6 @@ if [ -z "${HWLOC_DIR}" ]; then
         echo "BEGIN MESSAGE"
         echo "Found hwloc in ${HWLOC_DIR}"
         echo "END MESSAGE"
-        # Check that version is sufficient
-        export PKG_CONFIG_PATH=${hwloc_lib_dir}/pkgconfig:${PKG_CONFIG_PATH}
-        # we negate the return code since in perl true == 1 but for the shell true == 0
-        if ( pkg-config hwloc && pkg-config --modversion hwloc | 
-               perl -ne 'm/^0*(\d+)[.]0*(\d+)/; exit !($1 < 1 or $2 < 6)' ) || \
-           ( [ -r ${HWLOC_DIR}/include/hwloc.h ] &&
-             perl -ne 'exit !($1 lt "0x00010600") if m/^#define HWLOC_API_VERSION (.*)/' \
-               ${HWLOC_DIR}/include/hwloc.h ) ; then
-            echo "BEGIN MESSAGE"
-            echo "hwloc too old (require at least version 1.6)"
-            echo "END MESSAGE"
-            HWLOC_DIR='BUILD'
-        fi
     fi
 fi
 
@@ -134,42 +196,22 @@ else
         date > ${DONE_FILE}
     fi
     
-    if [ -z "${hwloc_lib_dir}" ]; then
-        hwloc_lib_dir="${HWLOC_DIR}/lib"
+    if [ "${HWLOC_DIR}" != 'NO_BUILD' ]; then
+        : ${HWLOC_INC_DIRS="${HWLOC_DIR}/include"}
+        : ${HWLOC_LIB_DIRS="${HWLOC_DIR}/lib"}
     fi
-    
-    # Check whether pkg-config works
-    export PKG_CONFIG_PATH=${hwloc_lib_dir}/pkgconfig:${PCIUTILS_DIR}/lib/pkgconfig:${PKG_CONFIG_PATH}
-    if ! pkg-config hwloc; then
-        echo "BEGIN MESSAGE"
-        echo "pkg-config not found; attempting to use reasonable defaults"
-        echo "END MESSAGE"
-        
-        HWLOC_INC_DIRS="${HWLOC_DIR}/include"
-        HWLOC_LIB_DIRS="${HWLOC_DIR}/lib"
-        HWLOC_LIBS='hwloc'
-    else
-        inc_dirs="$(pkg-config hwloc --static --cflags 2>/dev/null || pkg-config hwloc --cflags)"
-        lib_dirs="$(pkg-config hwloc --static --libs 2>/dev/null || pkg-config hwloc --libs)"
-        libs="$(pkg-config hwloc --static --libs 2>/dev/null || pkg-config hwloc --libs)"
-        # Translate option flags into Cactus options:
-        # - for INC_DIRS, remove -I prefix from flags
-        # - for LIB_DIRS, remove all -l flags, and remove -L prefix from flags
-        # - for LIBS, keep only -l flags, and remove -l prefix from flags
-        HWLOC_INC_DIRS="$(echo '' $(for flag in $inc_dirs; do echo '' $flag; done | sed -e 's/^ -I//'))"
-        HWLOC_LIB_DIRS="$(echo '' $(for flag in $lib_dirs; do echo '' $flag; done | grep -v '^ -l' | sed -e 's/^ -L//'))"
-        HWLOC_LIBS="$(echo '' $(for flag in $libs; do echo '' $flag; done | grep '^ -l' | sed -e 's/^ -l//'))"
-    fi
-    
-    # Add libnuma manually, if necessary
+    : ${HWLOC_LIBS='hwloc'}
+
+fi
+
+# Add libnuma manually, if necessary
+for hwloc_lib_dir in ${HWLOC_LIB_DIRS} ; do
     if grep -q '[-]lnuma' ${hwloc_lib_dir}/libhwloc.la 2>/dev/null; then
         if ! echo '' ${HWLOC_LIBS} '' | grep -q ' numa '; then
             HWLOC_LIBS="${HWLOC_LIBS} numa"
         fi
     fi
-
-fi
-
+done
 
 
 ################################################################################
