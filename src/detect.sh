@@ -20,38 +20,6 @@ if [ -z "${HWLOC_DIR}" ]; then
     echo "hwloc selected, but HWLOC_DIR not set. Checking some places..."
     echo "END MESSAGE"
     
-<<<<<<<
-    DIRS="/usr /usr/local /usr/local/packages /usr/local/apps /opt/local ${HOME} c:/packages"
-    for dir in $DIRS; do
-        # libraries might have different file extensions
-        for libext in a dll dll.a dylib lib so; do
-            # libraries can be in lib or lib64 (or libx32?)
-            for libdir in lib64 lib/x86_64-linux-gnu lib lib/i386-linux-gnu; do
-                FILES="include/hwloc.h $libdir/libhwloc.$libext"
-                # assume this is the one and check all needed files
-                HWLOC_DIR="$dir"
-                for file in $FILES; do
-                    # discard this directory if one file was not found
-                    if [ ! -r "$dir/$file" ]; then
-                        unset HWLOC_DIR
-                        break
-                    fi
-                done
-                # don't look further if all files have been found
-                if [ -n "$HWLOC_DIR" ]; then
-                    hwloc_lib_dir="$HWLOC_DIR/$libdir"
-                    break
-                fi
-            done
-            # don't look further if all files have been found
-            if [ -n "$HWLOC_DIR" ]; then
-                break
-            fi
-        done
-        # don't look further if all files have been found
-        if [ -n "$HWLOC_DIR" ]; then
-            break
-=======
     # Check whether pkg-config works
     export PKG_CONFIG_PATH=pkgconfig:${PCIUTILS_DIR}/lib/pkgconfig:${PKG_CONFIG_PATH}
     if pkg-config hwloc; then
@@ -74,7 +42,6 @@ if [ -z "${HWLOC_DIR}" ]; then
             echo "BEGIN MESSAGE"
             echo "hwloc in ${HWLOC_DIR} too old (require at least version 1.6)"
             echo "END MESSAGE"    
->>>>>>>
         fi
     else
       echo "BEGIN MESSAGE"
@@ -84,10 +51,11 @@ if [ -z "${HWLOC_DIR}" ]; then
       DIRS="/usr /usr/local /usr/local/packages /usr/local/apps /opt/local ${HOME} c:/packages"
       for dir in $DIRS; do
           # libraries might have different file extensions
-          for libext in a so dylib; do
-              # libraries can be in /lib or /lib64
+          for libext in a dll dll.a so dylib lib so; do
+              # libraries can be in /lib or /lib64 (or libx32?)
               for libdir in lib64 lib/x86_64-linux-gnu lib lib/i386-linux-gnu; do
                   FILES="include/hwloc.h $libdir/libhwloc.$libext"
+                  # assume this is the one and check all needed file
                   HWLOC_DIR="$dir"
                   HWLOC_LIB_DIRS="$dir/$libdir"
                   HWLOC_INC_DIRS="$dir/include"
