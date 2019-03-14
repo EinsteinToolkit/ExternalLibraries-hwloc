@@ -51,12 +51,8 @@ ${TAR?} xzf ${SRCDIR}/../dist/${NAME}.tar.gz
 
 echo "hwloc: Configuring..."
 cd ${NAME}
-# Provide a special option for Blue Gene/Q; this is a cross-compile,
-# so we can't easily detect this automatically
-if echo ${CC} | grep -q bgxlc; then
-    bgq='--host=powerpc64-bgq-linux'
-else
-    bgq=''
+if [ "x${HWLOC_CROSS_COMPILE}" = xyes ]; then
+  CROSS_OPTIONS="--host ${CPU}-${VENDOR}-${OS}"
 fi
 # Disable Cairo and XML explicitly, since configure may pick it up if
 # it is installed on the system, but our final link line may not link
@@ -69,7 +65,7 @@ else
 fi
 ## Disable pciaccess by forcing compiler errors
 #export HWLOC_PCIACCESS_CFLAGS=DISABLE-PCIACCESS
-./configure --prefix=${HWLOC_DIR} ${bgq} ${handle_pci} --disable-cairo --disable-libxml2 --disable-cuda --disable-opencl --enable-shared=no --enable-static=yes
+./configure --prefix=${HWLOC_DIR} ${CROSS_OPTIONS:-} ${handle_pci} --disable-cairo --disable-libxml2 --disable-cuda --disable-opencl --enable-shared=no --enable-static=yes
 
 echo "hwloc: Building..."
 ${MAKE}

@@ -1,6 +1,7 @@
 # Main make.code.deps file for thorn HWLOC
 
 export HWLOC_INSTALL_DIR
+export HWLOC_CROSS_COMPILE
 
 $(CCTK_TARGET) $(OBJS) $(SRCS:%=%.d): $(SCRATCH_BUILD)/done/$(THORN)
 
