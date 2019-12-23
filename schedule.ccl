@@ -1,6 +1,15 @@
 # Schedule definitions for thorn hwloc
 
-#SCHEDULE hwloc_lstopo AT startup
+SCHEDULE GROUP hwloc_startup AT startup
+{
+} "hwloc startup group"
+
+SCHEDULE hwloc_version IN hwloc_startup
+{
+  LANG: C
+} "Output hwloc version"
+
+#SCHEDULE hwloc_lstopo IN hwloc_startup
 #{
 #  LANG: C
 #} "Output hardware locality information"

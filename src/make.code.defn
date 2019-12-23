@@ -3,7 +3,7 @@
 CFLAGS += -DHWLOC_UTILPATH='$(CCTK_HOME)/exe/$(notdir $(TOP))'
 
 # Source files in this directory
-SRCS = # lstopo.c
+SRCS = version.c # lstopo.c
 
 # Subdirectories containing source files
 SUBDIRS = 
