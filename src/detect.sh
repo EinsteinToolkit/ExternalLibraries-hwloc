@@ -37,7 +37,7 @@ if [ -z "${HWLOC_DIR}" ]; then
             HWLOC_INC_DIRS="$(echo '' $(for flag in $inc_dirs; do echo '' $flag; done | sed -e 's/^ -I//'))"
             HWLOC_LIB_DIRS="$(echo '' $(for flag in $lib_dirs; do echo '' $flag; done | grep -v '^ -l' | sed -e 's/^ -L//'))"
             HWLOC_LIBS="$(echo '' $(for flag in $libs; do echo '' $flag; done | grep '^ -l' | sed -e 's/^ -l//'))"
-            HWLOC_DIR="$(echo ${HWLOC_INC_DIRS} NO_BUILD | sed 's!/[^/]* *!!')"
+            HWLOC_DIR="$(echo ${HWLOC_INC_DIRS} NO_BUILD | sed 's!/[^/]* .*!!')"
         else
             echo "BEGIN MESSAGE"
             echo "hwloc in ${HWLOC_DIR} too old (require at least version 1.6)"
@@ -55,7 +55,7 @@ if [ -z "${HWLOC_DIR}" ]; then
               # libraries can be in /lib or /lib64 (or libx32?)
               for libdir in lib64 lib/x86_64-linux-gnu lib lib/i386-linux-gnu; do
                   FILES="include/hwloc.h $libdir/libhwloc.$libext"
-                  # assume this is the one and check all needed file
+                  # assume this is the one and check all needed files
                   HWLOC_DIR="$dir"
                   HWLOC_LIB_DIRS="$dir/$libdir"
                   HWLOC_INC_DIRS="$dir/include"
