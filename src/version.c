@@ -8,6 +8,6 @@ int hwloc_version(void) {
   if (runtime_api_version != buildtime_api_version)
     CCTK_VERROR("build-time API version: 0x%x, run-time API version: 0x%x",
                 buildtime_api_version, runtime_api_version);
-  CCTK_VINFO("API version 0x%x", buildtime_api_versionx);
+  CCTK_VINFO("API version 0x%x", buildtime_api_version);
   return 0;
 }
