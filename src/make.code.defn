@@ -1,7 +1,7 @@
 # Main make.code.defn file for thorn hwloc
 
 CFLAGS += -DHWLOC_UTILPATH='$(CCTK_HOME)/exe/$(notdir $(TOP))'
-
+CFLAGS += $(foreach V,HWLOC_VERSION_BUILD HWLOC_VERSION_PKGCONFIG HWLOC_VERSION_HWLOCINFO, $(if $($(V)),-D$(V)='"$($(V))"'))
 # Source files in this directory
 SRCS = version.c # lstopo.c
 

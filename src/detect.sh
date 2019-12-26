@@ -38,6 +38,7 @@ if [ -z "${HWLOC_DIR}" ]; then
             HWLOC_LIB_DIRS="$(echo '' $(for flag in $lib_dirs; do echo '' $flag; done | grep -v '^ -l' | sed -e 's/^ -L//'))"
             HWLOC_LIBS="$(echo '' $(for flag in $libs; do echo '' $flag; done | grep '^ -l' | sed -e 's/^ -l//'))"
             HWLOC_DIR="$(echo ${HWLOC_INC_DIRS} NO_BUILD | sed 's!/[^/]* .*!!')"
+            HWLOC_VERSION_PKGCONFIG=$(pkg-config --modversion hwloc)
         else
             echo "BEGIN MESSAGE"
             echo "hwloc in ${HWLOC_DIR} too old (require at least version 1.6)"
@@ -156,6 +157,7 @@ then
     HWLOC_INC_DIRS="${HWLOC_DIR}/include"
     HWLOC_LIB_DIRS="${HWLOC_DIR}/lib"
     HWLOC_LIBS='hwloc'
+    HWLOC_VERSION_BUILD=${NAME#*-}
 else
     HWLOC_BUILD=
     DONE_FILE=${SCRATCH_BUILD}/done/${THORN}
@@ -170,6 +172,12 @@ else
     fi
     : ${HWLOC_LIBS='hwloc'}
 
+    if [ "${HWLOC_DIR}" = 'NO_BUILD' ]; then
+      HWLOC_RAW_INFO=$(hwloc-info --version 2>/dev/null)
+    else
+      HWLOC_RAW_INFO=$(${HWLOC_DIR}/bin/hwloc-info --version 2>/dev/null)
+    fi
+    HWLOC_VERSION_HWLOCINFO=$(echo $HWLOC_RAW_INFO | perl -ne 'm/(.*) (.*)/;print $2')
 fi
 
 # Add libnuma manually, if necessary
@@ -202,6 +210,14 @@ echo "HWLOC_DIR      = ${HWLOC_DIR}"
 echo "HWLOC_INC_DIRS = ${HWLOC_INC_DIRS}"
 echo "HWLOC_LIB_DIRS = ${HWLOC_LIB_DIRS}"
 echo "HWLOC_LIBS     = ${HWLOC_LIBS}"
+echo "END MAKE_DEFINITION"
+
+# Pass version information to Cactus in case it is not included in hwloc.h (for
+# versions less than 2.1)
+echo "BEGIN MAKE_DEFINITION"
+echo "HWLOC_VERSION_PKGCONFIG = ${HWLOC_VERSION_PKGCONFIG}"
+echo "HWLOC_VERSION_HWLOCINFO = ${HWLOC_VERSION_HWLOCINFO}"
+echo "HWLOC_VERSION_BUILD = ${HWLOC_VERSION_BUILD}"
 echo "END MAKE_DEFINITION"
 
 echo 'INCLUDE_DIRECTORY $(HWLOC_INC_DIRS)'
