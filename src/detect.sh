@@ -173,11 +173,13 @@ else
     : ${HWLOC_LIBS='hwloc'}
 
     if [ "${HWLOC_DIR}" = 'NO_BUILD' ]; then
-      HWLOC_RAW_INFO=$(hwloc-info --version 2>/dev/null)
+      HWLOC_INFO_EXE=hwloc-info
     else
-      HWLOC_RAW_INFO=$(${HWLOC_DIR}/bin/hwloc-info --version 2>/dev/null)
+      HWLOC_INFO_EXE="${HWLOC_DIR}/bin/hwloc-info"
     fi
-    HWLOC_VERSION_HWLOCINFO=$(echo $HWLOC_RAW_INFO | perl -ne 'm/(.*) (.*)/;print $2')
+    if $HWLOC_INFO_EXE --version &>/dev/null ; then
+      HWLOC_VERSION_HWLOCINFO="$($HWLOC_INFO_EXE --version 2>/dev/null | perl -ne 'm/(.*) (.*)/;print $2')"
+    fi
 fi
 
 # Add libnuma manually, if necessary
