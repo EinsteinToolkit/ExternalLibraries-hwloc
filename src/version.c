@@ -21,8 +21,8 @@ int hwloc_version(void) {
   unsigned runtime_api_version = hwloc_get_api_version();
   // TODO: Check only major version number?
   if (runtime_api_version != buildtime_api_version)
-    CCTK_VERROR("library version %s, build-time API version 0x%x, run-time API "
-                "version 0x%x",
+    CCTK_VWARN(CCTK_WARN_ALERT,
+               "library version %s, build-time API version 0x%x, run-time API version 0x%x",
                 library_version, buildtime_api_version, runtime_api_version);
   CCTK_VINFO("library version %s, API version 0x%x", library_version,
              buildtime_api_version);
