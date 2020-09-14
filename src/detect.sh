@@ -180,16 +180,16 @@ else
     if $HWLOC_INFO_EXE --version &>/dev/null ; then
       HWLOC_VERSION_HWLOCINFO="$($HWLOC_INFO_EXE --version 2>/dev/null | perl -ne 'm/(.*) (.*)/;print $2')"
     fi
-fi
 
-# Add libnuma manually, if necessary
-for hwloc_lib_dir in ${HWLOC_LIB_DIRS} ; do
-    if grep -q '[-]lnuma' ${hwloc_lib_dir}/libhwloc.la 2>/dev/null; then
-        if ! echo '' ${HWLOC_LIBS} '' | grep -q ' numa '; then
-            HWLOC_LIBS="${HWLOC_LIBS} numa"
+    # Add libnuma manually, if necessary
+    for hwloc_lib_dir in ${HWLOC_LIB_DIRS} ; do
+        if grep -q '[-]lnuma' ${hwloc_lib_dir}/libhwloc.la 2>/dev/null; then
+            if ! echo '' ${HWLOC_LIBS} '' | grep -q ' numa '; then
+                HWLOC_LIBS="${HWLOC_LIBS} numa"
+            fi
         fi
-    fi
-done
+    done
+fi
 
 
 ################################################################################
