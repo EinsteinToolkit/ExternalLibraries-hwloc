@@ -49,7 +49,7 @@ if [ -z "${HWLOC_DIR}" ]; then
       echo "pkg-config not found; attempting to use reasonable defaults"
       echo "END MESSAGE"
         
-      DIRS="/usr /usr/local /usr/local/packages /usr/local/apps /opt/local ${HOME} c:/packages"
+      DIRS="/usr /usr/local /usr/local/packages /usr/local/apps /opt/local /opt/homebrew ${HOME} c:/packages"
       for dir in $DIRS; do
           # libraries might have different file extensions
           for libext in a dll dll.a so dylib lib so; do
