@@ -35,8 +35,8 @@ if [ -z "${HWLOC_DIR}" ]; then
             # - for LIB_DIRS, remove all -l flags, and remove -L prefix from flags
             # - for LIBS, keep only -l flags, and remove -l prefix from flags
             HWLOC_INC_DIRS="$(echo '' $(for flag in $inc_dirs; do echo '' $flag; done | grep '^ -I' | sed -e 's/^ -I//'))"
-            HWLOC_LIB_DIRS="$(echo '' $(for flag in $lib_dirs; do echo '' $flag; done | grep -v '^ -l' | sed -e 's/^ -L//'))"
-            HWLOC_LIBS="$(echo '' $(for flag in $libs; do echo '' $flag; done | grep '^ -l' | sed -e 's/^ -l//'))"
+            HWLOC_LIB_DIRS="$(echo '' $(for flag in $lib_dirs; do echo '' $flag; done | grep '^ -L' | sed -e 's/^ -L//'))"
+            HWLOC_LIBS="$(echo '' $(for flag in $libs; do echo '' $flag; done | grep -v '^ -L' | sed -e 's/^ -l//'))"
             HWLOC_DIR="$(echo ${HWLOC_INC_DIRS} NO_BUILD | sed 's!/[^/]* .*!!')"
             HWLOC_VERSION_PKGCONFIG=$(pkg-config --modversion hwloc)
         else
