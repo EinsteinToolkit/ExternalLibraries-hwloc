@@ -58,10 +58,10 @@ if echo ${CC} | grep -q bgxlc; then
 else
     bgq=''
 fi
-# Disable Cairo and XML explicitly, since configure may pick it up if
-# it is installed on the system, but our final link line may not link
-# against these libraries. (We could use our own libxml2 library if we
-# want.)
+# Disable Cairo, XML and libudev explicitly, since configure may pick
+# them up if they are installed on the system, but our final link line
+# may not link against these libraries. (We could use our own libxml2
+# library if we want.)
 if test -n "${HAVE_CAPABILITY_PCIUTILS}"; then
     handle_pci='--enable-libpci'
 else
@@ -69,7 +69,7 @@ else
 fi
 ## Disable pciaccess by forcing compiler errors
 #export HWLOC_PCIACCESS_CFLAGS=DISABLE-PCIACCESS
-./configure --prefix=${HWLOC_DIR} ${bgq} ${handle_pci} --disable-cairo --disable-libxml2 --disable-cuda --disable-nvml --disable-opencl --with-x=no --disable-gl --enable-shared=no --enable-static=yes
+./configure --prefix=${HWLOC_DIR} ${bgq} ${handle_pci} --disable-cairo --disable-libxml2 --disable-libudev --disable-cuda --disable-nvml --disable-opencl --with-x=no --disable-gl --enable-shared=no --enable-static=yes
 
 echo "hwloc: Building..."
 ${MAKE}
